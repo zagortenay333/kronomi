@@ -1,0 +1,11 @@
+.*
+!/.gitignore
+*.o
+*.pp
+*.dep
+*.dot
+*.bin
+*.exe
+*.gcda
+callgrind*
+heaptrack*
