@@ -1,5 +1,9 @@
+#include "base/core.h"
+#include "base/mem.h"
+
 #include <stdio.h>
 
 int main () {
-    printf("-------------\n");
+    defer { printf("2\n"); };
+    printf("1\n");
 }

@@ -3,16 +3,15 @@
 
 SRC_DIR       := src
 SRC_FILES     := $(shell find $(SRC_DIR) \
-				   -path $(SRC_DIR)"/gfx" -prune -false -o \
 				   -path $(SRC_DIR)"/os/linux" -prune -false -o \
 				   -iname *.cpp)
 OBJ_FILES     := $(SRC_FILES:.cpp=.o)
 DEP_FILES     := $(SRC_FILES:.cpp=.dep)
 EXE           := kronomi.exe
-CXX            := g++
+CXX           := g++
 RELEASE_FLAGS := -fno-omit-frame-pointer -g -O2 -DBUILD_RELEASE=1 -DBUILD_DEBUG=0 -DNDEBUG -Wno-unused-parameter
 DEBUG_FLAGS   := -g3 -DBUILD_RELEASE=0 -DBUILD_DEBUG=1 -fno-omit-frame-pointer
-CPPFLAGS      := -std=c++11 -fno-delete-null-pointer-checks -fno-strict-aliasing -fwrapv -Werror=vla \
+CPPFLAGS      := -std=c++20 -fno-delete-null-pointer-checks -fno-strict-aliasing -fwrapv -Werror=vla \
                  -Wall -Wextra -Wimplicit-fallthrough -Wswitch -Wno-unused-function -Wno-unused-value -Wno-unused-parameter -Wno-missing-braces \
 				 -I$(SRC_DIR) -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=600
 LDFLAGS       := -fuse-ld=mold -lm -lGL -lX11 -lpthread -lXrandr -lXi -ldl
@@ -36,16 +35,16 @@ endif
 $(EXE): $(OBJ_FILES)
 	@$(CXX) $(CPPFLAGS) $^ -o $@ $(LDFLAGS)
 
-release: CPPFLAGS  += $(RELEASE_FLAGS) -Wno-unused -g # -flto
-release: LDFLAGS += # -flto
+release: CPPFLAGS += $(RELEASE_FLAGS) -Wno-unused -g # -flto
+release: LDFLAGS  += # -flto
 release: $(EXE)
 
-debug: CPPFLAGS  += $(DEBUG_FLAGS)
-debug: LDFLAGS += -fsanitize=address # For asan stack traces.
+debug: CPPFLAGS += $(DEBUG_FLAGS)
+debug: LDFLAGS  += -fsanitize=address # For asan stack traces.
 debug: $(EXE)
 
-asan: CPPFLAGS  += -fsanitize=address,undefined -DASAN_ENABLED=1 $(DEBUG_FLAGS)
-asan: LDFLAGS += -fsanitize=address,undefined
+asan: CPPFLAGS += -fsanitize=address,undefined -DASAN_ENABLED=1 $(DEBUG_FLAGS)
+asan: LDFLAGS  += -fsanitize=address,undefined
 asan: $(EXE)
 
 pp:
