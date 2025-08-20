@@ -37,10 +37,8 @@ struct MemOp {
     U64 old_size;
 };
 
-typedef Void *(*MemFn) (Void *context, MemOp);
-
 struct Mem {
-    MemFn fn;
+    Void *(*fn) (Void *context, MemOp);
 };
 
 extern Mem mem_root;
