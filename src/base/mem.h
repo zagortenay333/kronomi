@@ -38,7 +38,7 @@ struct MemOp {
 };
 
 struct Mem {
-    Void *(*fn) (Void *context, MemOp);
+    Void *(*fn) (Void *ctx, MemOp);
 };
 
 extern Mem mem_root;
