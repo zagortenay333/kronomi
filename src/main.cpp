@@ -44,4 +44,11 @@ int main () {
     array_reverse(&s);
     array_iter_ptr (x, &a) printf("%u ", *x);
     printf("\n");
+
+    String x = str("hello there sailor! how's it going?");
+
+    Auto tokens = array_new<String>(tm);
+    str_split(x, str(" "), false, false, &tokens);
+    array_iter (token, &tokens) printf("[%.*s] ", STR(token));
+    printf("\n");
 }
