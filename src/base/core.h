@@ -24,7 +24,7 @@ typedef int            Int;
 typedef char           Char;
 typedef bool           Bool;
 typedef void           Void;
-typedef Char          *CString;
+typedef const Char    *CString;
 
 #define TERM_END           "\x1b[0m"
 #define TERM_START_BLACK   "\x1b[30m"

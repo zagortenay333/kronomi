@@ -3,6 +3,7 @@
 #include "base/array.h"
 
 #include <stdio.h>
+#include <vector>
 
 int main () {
     tmem_setup(&mem_root, 1*MB);
@@ -35,6 +36,11 @@ int main () {
 
     array_push_n(&a, 9, 7, 5, 3, 1);
     array_sort(&a);
+    array_iter_ptr (x, &a) printf("%u ", *x);
+    printf("\n");
+
+    Auto s = slice(&a);
+    array_reverse(&s);
     array_iter_ptr (x, &a) printf("%u ", *x);
     printf("\n");
 }
