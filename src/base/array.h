@@ -87,12 +87,6 @@ Slice<T> array_increase_count (Array<T> *a, U64 n, Bool zeroed) {
 }
 
 template <typename T>
-Void *array_increase_count_p (Array<T> *a, U64 n, Bool zeroed) {
-    Slice<T> out = array_increase_count(a, n, zeroed);
-    return out.data;
-}
-
-template <typename T>
 Void array_ensure_count (Array<T> *a, U64 n, Bool zeroed) {
     if (a->count < n) array_increase_count(a, (n - a->count), zeroed);
 }
@@ -120,7 +114,59 @@ T *array_insert_slot (Array<T> *a, U64 idx) {
     return p;
 }
 
-// #define array_increase_count_o(A, N, Z, O) uarray_increase_count(uarray_from(A), array_esize(A), N, Z, uslice_from(O));
+template <typename T>
+Slice<T> array_insert_gap (Array<T> *a, U64 count, U64 idx, Bool zeroed) {
+    idx = min(a->count, idx);
+    U64 bytes_to_move = a->count - idx;
+    array_increase_count(a, count, false);
+    T *p = &a->data[idx];
+    memmove(&p[count], p, sizeof(T) * bytes_to_move);
+    Slice<T> r = { .data=p, .count=count };
+    if (zeroed) memset(r.data, 0, sizeof(T) * count);
+    return r;
+}
+
+template <typename T>
+Void array_remove (Array<T> *a, U64 idx) {
+    array_bounds_check(a, idx);
+    if (idx < (a->count - 1)) {
+        T *src = &a->data[idx + 1];
+        T *dst = &a->data[idx];
+        memmove(dst, src, sizeof(T) * (a->count - idx - 1));
+    }
+    a->count--;
+}
+
+template <typename T>
+Void array_push_many (Array<T> *a, Slice<T> *elems) {
+    if (elems->count) {
+        Slice<T> p = array_increase_count(a, elems->count, false);
+        memcpy(p.data, elems->data, sizeof(T) * elems->count);
+    }
+}
+
+template <typename T>
+Void array_insert_many (Array<T> *a, Slice<T> *elems, U64 idx) {
+    if (elems->count) {
+        Slice <T> p = array_insert_gap(a, elems->count, idx, false);
+        memcpy(p.data, elems->data, sizeof(T) * elems->count);
+    }
+}
+
+template <typename T>
+Void array_sort (Array<T> *a, Int(*cmp)(Void*, Void*)) {
+    std::qsort(a->data, a->count, sizeof(T), cmp);
+}
+
+template <typename T>
+U64 array_bsearch (Array<T> *a, T *elem, Int(*cmp)(Void*, Void*)) {
+    Void *p = std::bsearch(elem, a->data, a->count, sizeof(T), cmp);
+    return p ? (static_cast<U8*>(p) - a->data) / sizeof(T) : ARRAY_NIL_IDX;
+}
+
+Int array_cmp_u8  (Void *A, Void *B) { U8  a = *static_cast<U8*>(A), b = *static_cast<U8*>(B); return (a < b) ? -1 : (a > b) ? 1 : 0; }
+Int array_cmp_u32 (Void *A, Void *B) { U64 a = *static_cast<U64*>(A), b = *static_cast<U64*>(B); return (a < b) ? -1 : (a > b) ? 1 : 0; }
+Int array_cmp_u64 (Void *A, Void *B) { U64 a = *static_cast<U64*>(A), b = *static_cast<U64*>(B); return (a < b) ? -1 : (a > b) ? 1 : 0; }
 
 template <typename T> Void     array_init     (Array<T> *a, Mem *mem) { *a = { .mem=mem }; }
 template <typename T> Void     array_init_cap (Array<T> *a, Mem *mem, U64 cap) { array_init(a, mem); array_increase_capacity(a, cap); }
