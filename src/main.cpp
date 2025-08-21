@@ -1,6 +1,7 @@
 #include "base/core.h"
 #include "base/mem.h"
 #include "base/array.h"
+#include "base/string.h"
 
 #include <stdio.h>
 #include <vector>

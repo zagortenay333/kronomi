@@ -1,4 +1,4 @@
-#if 0
+#if 1
 #include <errno.h>
 #include <stdio.h>
 #include "base/string.h"
@@ -260,15 +260,15 @@ I64 str_fuzzy_search (String needle, String haystack, Array<String> *tokens) {
 Void    astr_print         (AString *a)                           { if (a->count) printf("%.*s", STR(*a)); }
 Void    astr_println       (AString *a)                           { if (a->count) printf("%.*s\n", STR(*a)); }
 CString astr_to_cstr       (AString *a)                           { astr_push_byte(a, 0); return a->data; }
-String  astr_to_str        (AString *a)                           { return a->as_slice; }
-Void    astr_push_u8       (AString *a, U8 v)                     { array_push_n(a, v); }
-Void    astr_push_2u8      (AString *a, U8 x, U8 y)               { array_push_n(a, x, y); }
-Void    astr_push_3u8      (AString *a, U8 x, U8 y, U8 z)         { array_push_n(a, x, y, z); }
-Void    astr_push_byte     (AString *a, U8 b)                     { array_push(a, b); }
-Void    astr_push_bytes    (AString *a, U8 b, U64 n)              { Slice<U8> = array_increase_count(a, n, false); if (n) memset(s.data, b, n); }
-Void    astr_push_str      (AString *a, String s)                 { array_push_many(a, &s); }
-Void    astr_push_cstr     (AString *a, CString s)                { astr_push_str(a, String{ .data=s, .count=(U64)(strlen(s)) }); }
-Void    astr_push_cstr_nul (AString *a, CString s)                { astr_push_str(a, String{ .data=s, .count=(U64)(strlen(s) + 1) }); }
+String  astr_to_str        (AString *a)                           { return {a->data, a->count}; }
+Void    astr_push_u8       (AString *a, U8 v)                     { array_push_n(a, static_cast<Char>(v)); }
+Void    astr_push_2u8      (AString *a, U8 x, U8 y)               { array_push_n(a, static_cast<Char>(x), static_cast<Char>(y)); }
+Void    astr_push_3u8      (AString *a, U8 x, U8 y, U8 z)         { array_push_n(a, static_cast<Char>(x), static_cast<Char>(y), static_cast<Char>(z)); }
+Void    astr_push_byte     (AString *a, U8 b)                     { array_push(a, static_cast<Char>(b)); }
+Void    astr_push_bytes    (AString *a, U8 b, U64 n)              { Slice<Char> s = array_increase_count(a, n, false); if (n) memset(s.data, b, n); }
+Void    astr_push_str      (AString *a, String s)                 { array_push_many(a, s); }
+Void    astr_push_cstr     (AString *a, CString s)                { astr_push_str(a, String{ .data=const_cast<Char*>(s), .count=(U64)(strlen(s)) }); }
+Void    astr_push_cstr_nul (AString *a, CString s)                { astr_push_str(a, String{ .data=const_cast<Char*>(s), .count=(U64)(strlen(s) + 1) }); }
 Void    astr_push_2cstr    (AString *a, CString s1, CString s2)   { astr_push_cstr(a, s1); astr_push_cstr(a, s2); }
 Void    astr_push_fmt      Fmt(2, 3) (AString *a, CString f, ...) { astr_push_fmt_vam(a, f); }
 

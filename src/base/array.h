@@ -69,7 +69,7 @@ const U64 ARRAY_NIL_IDX = UINT64_MAX;
 // =============================================================================
 // Memory management:
 // =============================================================================
-template <typename T> U64 array_elem_size (T *a) { return sizeof(a->data[0]); }
+template <typename T> U64 array_elem_size (T *a) { return sizeof(Elem(T)); }
 template <typename T> U64 array_byte_size (T *a) { return array_elem_size(a) * a->count; }
 
 template <typename T>
@@ -147,9 +147,9 @@ template <typename T> Slice<Elem(T)> slice (T *a) { return { .data=a->data, .cou
 // =============================================================================
 // Sorting:
 // =============================================================================
-Int c_compare (U8 *a, U8 *b)   { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
-Int c_compare (U32 *a, U32 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
-Int c_compare (U64 *a, U64 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
+inline Int c_compare (U8 *a, U8 *b)   { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
+inline Int c_compare (U32 *a, U32 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
+inline Int c_compare (U64 *a, U64 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
 
 template <typename T>
 Void array_sort_cmp (T *a, Int(*cmp)(Elem(T)*, Elem(T)*)) {
@@ -205,7 +205,7 @@ Elem(T) array_find_get (T *a, const F &f) {
 }
 
 template <typename T, typename F>
-Elem(T) array_find_ptr (T *a, const F &f) {
+Elem(T) *array_find_ptr (T *a, const F &f) {
     Elem(T) *r = 0;
     array_iter_ptr (it, a) if (f(it)) { r = it; break; }
     return r;
@@ -244,8 +244,8 @@ Void array_find_remove_all (T *a, const F &f) {
 }
 
 template <typename T>
-Bool array_has (T *a, T e)  {
-    return !!array_find_ref(a, [&](Auto it){ return e == *it; });
+Bool array_has (T *a, Elem(T) e)  {
+    return !!array_find_ptr(a, [&](Auto it){ return e == *it; });
 }
 
 // =============================================================================
