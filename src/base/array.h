@@ -183,3 +183,16 @@ template <typename T> T  array_get_last     (Array<T> *a)             { return *
 template <typename T> T  array_set_last     (Array<T> *a, T v)        { return *array_ref_last(a) = v; }
 template <typename T> T *array_try_ref_last (Array<T> *a)             { return a->count ? &a->data[a->count - 1] : 0; }
 template <typename T> T  array_try_get_last (Array<T> *a)             { return a->count ? a->data[a->count - 1] : AElem(a){}; }
+
+#define array_push_lit(A, ...)   array_push(A, AElem(A){__VA_ARGS__})
+#define array_insert_lit(A, ...) array_insert(A, AElem(A){__VA_ARGS__})
+#define array_push_n(A, ...)     do { AElem(A) _(E)[] = {__VA_ARGS__}; array_push_many(A, Slice<T>{ .data=_(E), .count=(sizeof(_(E)) / sizeof(_(E)[0])) }); }while(0)
+
+template <typename T> Void array_push   (Array<T> *a, T v) { *array_push_slot(a) = v; }
+template <typename T> Void array_insert (Array<T> *a, T v) { *array_insert_slot(a) = v; }
+template <typename T> Void array_push_if_unique (Array<T> *a, T e) { if (! array_has(a, e)) array_push(a, e); }
+
+template <typename T> T array_pop         (Array<T> *a)        { T r = array_get_last(a); a->count--; return r; }
+template <typename T> T array_pop_or      (Array<T> *a, T v)   { return a->count ? array_pop(a) : v; }
+template <typename T> T array_remove_fast (Array<T> *a, U64 i) { array_set(a, i, array_get_last(a)); a->count--; }
+
