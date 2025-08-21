@@ -153,20 +153,20 @@ Void array_insert_many (Array<T> *a, Slice<T> *elems, U64 idx) {
     }
 }
 
+Int c_compare (U8 *a, U8 *b)   { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
+Int c_compare (U32 *a, U32 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
+Int c_compare (U64 *a, U64 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
+
 template <typename T>
-Void array_sort (Array<T> *a, Int(*cmp)(Void*, Void*)) {
+Void array_sort (Array<T> *a, Int(*cmp)(T*, T*)) {
     std::qsort(a->data, a->count, sizeof(T), cmp);
 }
 
 template <typename T>
-U64 array_bsearch (Array<T> *a, T *elem, Int(*cmp)(Void*, Void*)) {
+U64 array_bsearch (Array<T> *a, T *elem, Int(*cmp)(T*, T*)) {
     Void *p = std::bsearch(elem, a->data, a->count, sizeof(T), cmp);
     return p ? (static_cast<U8*>(p) - a->data) / sizeof(T) : ARRAY_NIL_IDX;
 }
-
-Int array_cmp_u8  (Void *A, Void *B) { U8  a = *static_cast<U8*>(A), b = *static_cast<U8*>(B); return (a < b) ? -1 : (a > b) ? 1 : 0; }
-Int array_cmp_u32 (Void *A, Void *B) { U64 a = *static_cast<U64*>(A), b = *static_cast<U64*>(B); return (a < b) ? -1 : (a > b) ? 1 : 0; }
-Int array_cmp_u64 (Void *A, Void *B) { U64 a = *static_cast<U64*>(A), b = *static_cast<U64*>(B); return (a < b) ? -1 : (a > b) ? 1 : 0; }
 
 template <typename T> Void     array_init     (Array<T> *a, Mem *mem) { *a = { .mem=mem }; }
 template <typename T> Void     array_init_cap (Array<T> *a, Mem *mem, U64 cap) { array_init(a, mem); array_increase_capacity(a, cap); }
