@@ -68,7 +68,7 @@ const U64 ARRAY_NIL_IDX = UINT64_MAX;
                                           for (AElem(ARRAY) *X; (C) && (X = &ARRAY->data[ARRAY_IDX], true); INC)
 
 // =============================================================================
-// Memory:
+// Memory management:
 // =============================================================================
 template <typename T> U64 array_esize (Array<T> *a) { return sizeof(AElem(a)); }
 template <typename T> U64 array_size  (Array<T> *a) { return sizeof(T) * a->count; }
@@ -113,10 +113,11 @@ Void array_ensure_count (Array<T> *a, U64 n, Bool zeroed) {
 // =============================================================================
 // Init:
 // =============================================================================
-template <typename T> Void     array_init     (Array<T> *a, Mem *mem) { *a = { .mem=mem }; }
+template <typename T> Void     array_init     (Array<T> *a, Mem *mem)          { *a = { .mem=mem }; }
 template <typename T> Void     array_init_cap (Array<T> *a, Mem *mem, U64 cap) { array_init(a, mem); array_increase_capacity(a, cap); }
-template <typename T> Array<T> array_new      (Mem *mem)   { Array<T> a; array_init(&a, mem); return a; }
-template <typename T> Void     array_free     (Array<T> a) { mem_free(a->mem, .old_ptr=a->data, .old_size=array_size(a)); }
+template <typename T> Array<T> array_new      (Mem *mem)                       { Array<T> a; array_init(&a, mem); return a; }
+template <typename T> Array<T> array_new_cap  (Mem *mem, U64 cap)              { Array<T> a; array_init_cap(&a, mem, cap); return a; }
+template <typename T> Void     array_free     (Array<T> a)                     { mem_free(a->mem, .old_ptr=a->data, .old_size=array_size(a)); }
 
 // =============================================================================
 // Access:
