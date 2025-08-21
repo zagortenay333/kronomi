@@ -50,6 +50,20 @@ struct Slice {
 
 const U64 ARRAY_NIL_IDX = UINT64_MAX;
 
+#define array_iter(X, A)              let1(ARRAY, A)        ARRAY_ITER(X, 0, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
+#define array_iter_from(X, A, I)      let2(ARRAY, I_, A, I) ARRAY_ITER(X, I_, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
+#define array_iter_back(X, A)         let1(ARRAY, A)        ARRAY_ITER(X, ARRAY->count, (ARRAY_IDX-- > 0), /**/)
+#define array_iter_back_from(X, A, I) let2(ARRAY, I_, A, I) ARRAY_ITER(X, (ARRAY->count ? I_+1 : 0), (ARRAY_IDX-- > 0), /**/)
+#define ARRAY_ITER(X, F, C, INC)      for (U64 ARRAY_IDX=(F), _(I)=1; _(I); _(I)=0)\
+                                      for (AElem(ARRAY) X; (C) && (X = ARRAY->data[ARRAY_IDX], true); INC)
+
+#define array_iter_ptr(X, A)              let1(ARRAY, A)        ARRAY_ITER_PTR(X, 0, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
+#define array_iter_ptr_from(X, A, I)      let2(ARRAY, I_, A, I) ARRAY_ITER_PTR(X, I_, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
+#define array_iter_ptr_back(X, A)         let1(ARRAY, A)        ARRAY_ITER_PTR(X, ARRAY->count, (ARRAY_IDX-- > 0), /**/)
+#define array_iter_ptr_back_from(X, A, I) let2(ARRAY, I_, A, I) ARRAY_ITER_PTR(X, (ARRAY->count ? I_+1 : 0), (ARRAY_IDX-- > 0), /**/)
+#define ARRAY_ITER_PTR(X, F, C, INC)      for (U64 ARRAY_IDX=(F), _(I)=1; _(I); _(I)=0)\
+                                          for (AElem(ARRAY) *X; (C) && (X = &ARRAY->data[ARRAY_IDX], true); INC)
+
 template <typename T> U64 array_esize (Array<T> *a) { return sizeof(AElem(a)); }
 template <typename T> U64 array_size  (Array<T> *a) { return sizeof(T) * a->count; }
 template <typename T> U64 array_bounds_check (Array<T> *a, U64 idx) { assert_always(idx < a->count); }
@@ -188,11 +202,45 @@ template <typename T> T  array_try_get_last (Array<T> *a)             { return a
 #define array_insert_lit(A, ...) array_insert(A, AElem(A){__VA_ARGS__})
 #define array_push_n(A, ...)     do { AElem(A) _(E)[] = {__VA_ARGS__}; array_push_many(A, Slice<T>{ .data=_(E), .count=(sizeof(_(E)) / sizeof(_(E)[0])) }); }while(0)
 
-template <typename T> Void array_push   (Array<T> *a, T v) { *array_push_slot(a) = v; }
-template <typename T> Void array_insert (Array<T> *a, T v) { *array_insert_slot(a) = v; }
+template <typename T> Void array_swap    (Array<T> *a, U64 i, U64 j) { T *e1=array_ref(a, i), *e2=array_ref(a, j), tmp=*e1; *e1=*e2; *e2=tmp; }
+template <typename T> Void array_reverse (Array<T> *a)               { for (U64 i=0; i < a->count/2; ++i) array_swap(a, i, a->count-i-1); }
+template <typename T> Void array_shuffle (Array<T> *a)               { array_iter (x, a) { x; swap(ARRAY->data[ARRAY_IDX], ARRAY->data[random_range(ARRAY_IDX, ARRAY->count)]); } }
+
+template <typename T> T    array_pop         (Array<T> *a)        { T r = array_get_last(a); a->count--; return r; }
+template <typename T> T    array_pop_or      (Array<T> *a, T v)   { return a->count ? array_pop(a) : v; }
+template <typename T> Void array_remove_fast (Array<T> *a, U64 i) { array_set(a, i, array_get_last(a)); a->count--; }
+template <typename T> Void array_swap_remove (Array<T> *a, U64 i) { array_swap(a, i, a->count-1); a->count--; }
+
+template <typename T, typename F>
+U64 array_find (Array<T> *a, F &f) {
+    U64 r = ARRAY_NIL_IDX;
+    array_iter (it, a) if (f(it)) { r = ARRAY_IDX; break; }
+    return r;
+}
+
+template <typename T, typename F>
+T array_find_get (Array<T> *a, F &f) {
+    T r = {};
+    array_iter (it, a) if (f(it)) { r = it; break; }
+    return r;
+}
+
+template <typename T, typename F>
+T *array_find_ptr (Array<T> *a, F &f) {
+    T *r = 0;
+    array_iter_ptr (it, a) if (f(it)) { r = it; break; }
+    return r;
+}
+
+// template <typename T, typename F> array_find_remove(A, C)            array_iter (IT, A) if (C) { array_remove(ARRAY, ARRAY_IDX); break; }
+// template <typename T, typename F> array_find_remove_fast(A, C)       array_iter (IT, A) if (C) { array_remove_fast(ARRAY, ARRAY_IDX); break; }
+// template <typename T, typename F> array_find_remove_all_fast(A, C)   array_iter_back (IT, A) if (C) array_remove_fast(ARRAY, ARRAY_IDX);
+// template <typename T, typename F> array_find_replace(A, C, R)        array_iter (IT, A) if (C) { ARRAY->data[ARRAY_IDX] = R; break; }
+// template <typename T, typename F> array_find_replace_all(A, C, R)    array_iter (IT, A) if (C) ARRAY->data[ARRAY_IDX] = R;
+// template <typename T, typename F> array_find_remove_all(A, C)        ({ def1(A_, A); U64 _(N)=0; array_iter (IT, A_) if (!(C)) { A_->data[_(N)++]=IT; } A_->count=_(N); })
+
+template <typename T> Bool array_has(Array<T> *a, T e)  { return !!array_find_ref(a, [&](T *it){ return e == *it; }); }
+
+template <typename T> Void array_push   (Array<T> *a, T e) { *array_push_slot(a) = e; }
+template <typename T> Void array_insert (Array<T> *a, T e) { *array_insert_slot(a) = e; }
 template <typename T> Void array_push_if_unique (Array<T> *a, T e) { if (! array_has(a, e)) array_push(a, e); }
-
-template <typename T> T array_pop         (Array<T> *a)        { T r = array_get_last(a); a->count--; return r; }
-template <typename T> T array_pop_or      (Array<T> *a, T v)   { return a->count ? array_pop(a) : v; }
-template <typename T> T array_remove_fast (Array<T> *a, U64 i) { array_set(a, i, array_get_last(a)); a->count--; }
-
