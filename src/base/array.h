@@ -31,6 +31,7 @@
 //
 // =============================================================================
 #include "base/mem.h"
+#include <cstring>
 
 template <typename T>
 struct Array {
@@ -51,7 +52,7 @@ struct Slice {
 const U64 ARRAY_NIL_IDX = UINT64_MAX;
 
 // =============================================================================
-// Iterators:
+// Iteration:
 // =============================================================================
 #define array_iter(X, A)              let1(ARRAY, A)        ARRAY_ITER(X, 0, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
 #define array_iter_from(X, A, I)      let2(ARRAY, I_, A, I) ARRAY_ITER(X, I_, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
@@ -75,7 +76,7 @@ template <typename T> U64 array_size  (Array<T> *a) { return sizeof(T) * a->coun
 
 template <typename T>
 Void array_maybe_decrease_capacity (Array<T> *a) {
-    if ((a->capacity > 4) && (a->count < (safe_mul(a->capacity, 25) / 100))) {
+    if ((a->capacity > 4) && (a->count < (safe_mul(a->capacity, 25lu) / 100))) {
         U64 new_cap = 2 * a->count;
         a->data     = mem_shrink(a->mem, T, .size=(sizeof(T) * new_cap), .old_ptr=a->data, .old_size=(sizeof(T) * a->capacity));
         a->capacity = new_cap;
@@ -83,10 +84,19 @@ Void array_maybe_decrease_capacity (Array<T> *a) {
 }
 
 template <typename T>
+Void array_ensure_capacity (Array<T> *a, U64 n) {
+    assert_dbg(n);
+    U64 new_cap = a->capacity ?: n;
+    while ((new_cap - a->count) < n) new_cap = safe_mul(new_cap, 2lu);
+    U64 dt = new_cap - a->capacity;
+    if (dt) array_increase_capacity(a, dt);
+}
+
+template <typename T>
 Void array_increase_capacity (Array<T> *a, U64 n) {
     assert_dbg(n);
     U64 new_cap = safe_add(a->capacity, n);
-    a->data     = mem_grow(a->mem, U8, .size=(sizeof(T) * new_cap), .old_ptr=a->data, .old_size=(sizeof(T) * a->capacity));
+    a->data     = mem_grow(a->mem, T, .size=(sizeof(T) * new_cap), .old_ptr=a->data, .old_size=(sizeof(T) * a->capacity));
     a->capacity = new_cap;
 }
 
@@ -101,7 +111,7 @@ Slice<T> array_increase_count (Array<T> *a, U64 n, Bool zeroed) {
     if (n) array_ensure_capacity(a, n);
     Slice<T> r = { .data=&a->data[a->count], .count=n };
     a->count += n;
-    if (zeroed) memset(r.data, 0, sizeof(T) * n);
+    if (zeroed) std::memset(r.data, 0, sizeof(T) * n);
     return r;
 }
 
@@ -122,17 +132,17 @@ template <typename T> Void     array_free     (Array<T> a)                     {
 // =============================================================================
 // Access:
 // =============================================================================
-template <typename T> U64 array_bounds_check (Array<T> *a, U64 idx)    { assert_always(idx < a->count); }
-template <typename T> T  *array_ref          (Array<T> *a, U64 i)      { array_bounds_check(a, i); return &a->data[i]; }
-template <typename T> T   array_get          (Array<T> *a, U64 i)      { return *array_ref(a, i); }
-template <typename T> T   array_set          (Array<T> *a, U64 i, T v) { return *array_ref(a, i) = v; }
-template <typename T> T  *array_try_ref      (Array<T> *a, U64 i)      { return (i < a->count) ? &a->data[i] : 0; }
-template <typename T> T   array_try_get      (Array<T> *a, U64 i)      { return (i < a->count) ? a->data[i] : AElem(a){}; }
-template <typename T> T  *array_ref_last     (Array<T> *a)             { array_bounds_check(a, 0); return &a->data[a->count - 1]; }
-template <typename T> T   array_get_last     (Array<T> *a)             { return *array_ref_last(a); }
-template <typename T> T   array_set_last     (Array<T> *a, T v)        { return *array_ref_last(a) = v; }
-template <typename T> T  *array_try_ref_last (Array<T> *a)             { return a->count ? &a->data[a->count - 1] : 0; }
-template <typename T> T   array_try_get_last (Array<T> *a)             { return a->count ? a->data[a->count - 1] : AElem(a){}; }
+template <typename T> Void array_bounds_check (Array<T> *a, U64 idx)    { assert_always(idx < a->count); }
+template <typename T> T   *array_ref          (Array<T> *a, U64 i)      { array_bounds_check(a, i); return &a->data[i]; }
+template <typename T> T    array_get          (Array<T> *a, U64 i)      { return *array_ref(a, i); }
+template <typename T> T    array_set          (Array<T> *a, U64 i, T v) { return *array_ref(a, i) = v; }
+template <typename T> T   *array_try_ref      (Array<T> *a, U64 i)      { return (i < a->count) ? &a->data[i] : 0; }
+template <typename T> T    array_try_get      (Array<T> *a, U64 i)      { return (i < a->count) ? a->data[i] : AElem(a){}; }
+template <typename T> T   *array_ref_last     (Array<T> *a)             { array_bounds_check(a, 0); return &a->data[a->count - 1]; }
+template <typename T> T    array_get_last     (Array<T> *a)             { return *array_ref_last(a); }
+template <typename T> T    array_set_last     (Array<T> *a, T v)        { return *array_ref_last(a) = v; }
+template <typename T> T   *array_try_ref_last (Array<T> *a)             { return a->count ? &a->data[a->count - 1] : 0; }
+template <typename T> T    array_try_get_last (Array<T> *a)             { return a->count ? a->data[a->count - 1] : AElem(a){}; }
 
 // =============================================================================
 // Sorting:
@@ -142,7 +152,12 @@ Int c_compare (U32 *a, U32 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
 Int c_compare (U64 *a, U64 *b) { return (*a < *b) ? -1 : (*a > *b) ? 1 : 0; }
 
 template <typename T>
-Void array_sort (Array<T> *a, Int(*cmp)(T*, T*)) { std::qsort(a->data, a->count, sizeof(T), cmp); }
+Void array_sort_cmp (Array<T> *a, Int(*cmp)(T*, T*)) {
+    Auto fn = reinterpret_cast<int(*)(const Void *, const Void *)>(cmp);
+    std::qsort(a->data, a->count, sizeof(T), fn);
+}
+
+template <typename T> Void array_sort    (Array<T> *a)               { array_sort_cmp(a, c_compare); }
 template <typename T> Void array_swap    (Array<T> *a, U64 i, U64 j) { T *e1=array_ref(a, i), *e2=array_ref(a, j), tmp=*e1; *e1=*e2; *e2=tmp; }
 template <typename T> Void array_reverse (Array<T> *a)               { for (U64 i=0; i < a->count/2; ++i) array_swap(a, i, a->count-i-1); }
 template <typename T> Void array_shuffle (Array<T> *a)               { array_iter (x, a) { x; swap(ARRAY->data[ARRAY_IDX], ARRAY->data[random_range(ARRAY_IDX, ARRAY->count)]); } }
@@ -176,60 +191,60 @@ U64 array_bsearch (Array<T> *a, T *elem, Int(*cmp)(T*, T*)) {
 }
 
 template <typename T, typename F>
-U64 array_find (Array<T> *a, F &f) {
+U64 array_find (Array<T> *a, const F &f) {
     U64 r = ARRAY_NIL_IDX;
     array_iter (it, a) if (f(it)) { r = ARRAY_IDX; break; }
     return r;
 }
 
 template <typename T, typename F>
-T array_find_get (Array<T> *a, F &f) {
+T array_find_get (Array<T> *a, const F &f) {
     T r = {};
     array_iter (it, a) if (f(it)) { r = it; break; }
     return r;
 }
 
 template <typename T, typename F>
-T *array_find_ptr (Array<T> *a, F &f) {
+T *array_find_ptr (Array<T> *a, const F &f) {
     T *r = 0;
     array_iter_ptr (it, a) if (f(it)) { r = it; break; }
     return r;
 }
 
 template <typename T, typename F>
-Void array_find_remove (Array<T> *a, F &f) {
+Void array_find_remove (Array<T> *a, const F &f) {
     array_iter (it, a) if (f(it)) { array_remove(a, ARRAY_IDX); break; }
 }
 
 template <typename T, typename F>
-Void array_find_remove_fast (Array<T> *a, F &f) {
+Void array_find_remove_fast (Array<T> *a, const F &f) {
     array_iter (it, a) if (f(it)) { array_remove_fast(a, ARRAY_IDX); break; }
 }
 
 template <typename T, typename F>
-Void array_find_remove_all_fast (Array<T> *a, F &f) {
+Void array_find_remove_all_fast (Array<T> *a, const F &f) {
     array_iter_back (it, a) if (f(it)) array_remove_fast(a, ARRAY_IDX);
 }
 
 template <typename T, typename F>
-Void array_find_replace(Array<T> *a, F &f, T r) {
+Void array_find_replace (Array<T> *a, const F &f, T r) {
     array_iter (it, a) if (f(it)) { a->data[ARRAY_IDX] = r; break; }
 }
 
 template <typename T, typename F>
-Void array_find_replace_all (Array<T> *a, F &f, T r) {
+Void array_find_replace_all (Array<T> *a, const F &f, T r) {
     array_iter (it, a) if (f(it)) a->data[ARRAY_IDX] = r;
 }
 
 template <typename T, typename F>
-Void array_find_remove_all (Array<T> *a, F &f) {
+Void array_find_remove_all (Array<T> *a, const F &f) {
     U64 n = 0;
     array_iter (it, a) if (! f(it)) { a->data[n++] = it; }
     a->count = n;
 }
 
 template <typename T>
-Bool array_has(Array<T> *a, T e)  {
+Bool array_has (Array<T> *a, T e)  {
     return !!array_find_ref(a, [&](T *it){ return e == *it; });
 }
 
@@ -241,7 +256,7 @@ Bool array_has(Array<T> *a, T e)  {
 
 #define array_push_n(A, ...) do {\
     AElem(A) _(E)[] = {__VA_ARGS__};\
-    array_push_many(A, Slice<T>{ .data=_(E), .count=(sizeof(_(E)) / sizeof(_(E)[0])) });\
+    array_push_many(A, Slice<AElem(A)>{ .data=_(E), .count=(sizeof(_(E)) / sizeof(_(E)[0])) });\
 }while(0)
 
 template <typename T>
@@ -275,23 +290,23 @@ Slice<T> array_insert_gap (Array<T> *a, U64 count, U64 idx, Bool zeroed) {
     T *p = &a->data[idx];
     memmove(&p[count], p, sizeof(T) * bytes_to_move);
     Slice<T> r = { .data=p, .count=count };
-    if (zeroed) memset(r.data, 0, sizeof(T) * count);
+    if (zeroed) std::memset(r.data, 0, sizeof(T) * count);
     return r;
 }
 
 template <typename T>
-Void array_push_many (Array<T> *a, Slice<T> *elems) {
-    if (elems->count) {
-        Slice<T> p = array_increase_count(a, elems->count, false);
-        memcpy(p.data, elems->data, sizeof(T) * elems->count);
+Void array_push_many (Array<T> *a, Slice<T> elems) {
+    if (elems.count) {
+        Slice<T> p = array_increase_count(a, elems.count, false);
+        std::memcpy(p.data, elems.data, sizeof(T) * elems.count);
     }
 }
 
 template <typename T>
-Void array_insert_many (Array<T> *a, Slice<T> *elems, U64 idx) {
-    if (elems->count) {
-        Slice <T> p = array_insert_gap(a, elems->count, idx, false);
-        memcpy(p.data, elems->data, sizeof(T) * elems->count);
+Void array_insert_many (Array<T> *a, Slice<T> elems, U64 idx) {
+    if (elems.count) {
+        Slice <T> p = array_insert_gap(a, elems.count, idx, false);
+        std::memcpy(p.data, elems.data, sizeof(T) * elems.count);
     }
 }
 

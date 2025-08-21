@@ -236,8 +236,8 @@ U8 tmem_pin_push (Mem *m, Bool exclusive) {
     return prev_pins;
 }
 
-Void tmem_pin_pop (U8 *prev_flags) {
-    tmem_ring.pin_flags = *prev_flags;
+Void tmem_pin_pop (U8 prev_flags) {
+    tmem_ring.pin_flags = prev_flags;
 }
 
 Mem mem_root = { gmem_fn };

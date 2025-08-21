@@ -161,12 +161,19 @@ struct TMemRing {
 
 extern tls TMemRing tmem_ring;
 
-#define tmem_new(N)      cleanup(tmem_destroy) TMem _##N; tmem_start(&_##N); Mem *N = cast(Mem*, &_##N);
-#define tmem_pin(M, ...) cleanup(tmem_pin_pop) U8 JOIN(_, __LINE__) = tmem_pin_push(M, __VA_ARGS__);
+#define tmem_new(N)\
+    TMem _##N;\
+    tmem_start(&_##N);\
+    Mem *N = reinterpret_cast<Mem*>(&_##N);\
+    defer { tmem_destroy(&_##N); };
+
+#define tmem_pin(M, ...)\
+    U8 JOIN(_, __LINE__) = tmem_pin_push(M, __VA_ARGS__);\
+    defer { tmem_pin_pop(JOIN(_, __LINE__)); };
 
 Void *mem_fn        (TMem *, MemOp);
 Void  tmem_setup    (Mem *, U64 min_total_size);
 Void  tmem_start    (TMem *);
 Void  tmem_destroy  (TMem *);
 U8    tmem_pin_push (Mem *, Bool exclusive);
-Void  tmem_pin_pop  (U8 *);
+Void  tmem_pin_pop  (U8);

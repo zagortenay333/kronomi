@@ -63,7 +63,7 @@ typedef Char          *CString;
 #define tls                thread_local
 #define Auto               auto
 #define Fmt(FMT, VA)       [[gnu::format(printf, FMT, VA)]]
-#define Type(X)            decltype(X)
+#define Type(X)            std::remove_reference_t<decltype(X)>
 #define panic()            __builtin_trap()
 #define assert_static(...) static_assert(__VA_ARGS__)
 #define badpath            panic()
