@@ -172,3 +172,14 @@ template <typename T> Void     array_init     (Array<T> *a, Mem *mem) { *a = { .
 template <typename T> Void     array_init_cap (Array<T> *a, Mem *mem, U64 cap) { array_init(a, mem); array_increase_capacity(a, cap); }
 template <typename T> Array<T> array_new      (Mem *mem)   { Array<T> a; array_init(&a, mem); return a; }
 template <typename T> Void     array_free     (Array<T> a) { mem_free(a->mem, .old_ptr=a->data, .old_size=array_size(a)); }
+
+template <typename T> T *array_ref          (Array<T> *a, U64 i)      { array_bounds_check(a, i); return &a->data[i]; }
+template <typename T> T  array_get          (Array<T> *a, U64 i)      { return *array_ref(a, i); }
+template <typename T> T  array_set          (Array<T> *a, U64 i, T v) { return *array_ref(a, i) = v; }
+template <typename T> T *array_try_ref      (Array<T> *a, U64 i)      { return (i < a->count) ? &a->data[i] : 0; }
+template <typename T> T  array_try_get      (Array<T> *a, U64 i)      { return (i < a->count) ? a->data[i] : AElem(a){}; }
+template <typename T> T *array_ref_last     (Array<T> *a)             { array_bounds_check(a, 0); return &a->data[a->count - 1]; }
+template <typename T> T  array_get_last     (Array<T> *a)             { return *array_ref_last(a); }
+template <typename T> T  array_set_last     (Array<T> *a, T v)        { return *array_ref_last(a) = v; }
+template <typename T> T *array_try_ref_last (Array<T> *a)             { return a->count ? &a->data[a->count - 1] : 0; }
+template <typename T> T  array_try_get_last (Array<T> *a)             { return a->count ? a->data[a->count - 1] : AElem(a){}; }
