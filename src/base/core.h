@@ -119,9 +119,9 @@ inline U8 leading_one_bits (U64 x) { return (x == UINT64_MAX) ? 64 : __builtin_c
 #define def1(...) def1_(identity, __VA_ARGS__)
 #define def2(...) def2_(identity, __VA_ARGS__)
 #define def3(...) def3_(identity, __VA_ARGS__)
-#define let_(...) for (__VA_ARGS__ _(I);)
-#define let1(...) for (U8 _(I)=1; _(I);) def1_(let_, __VA_ARGS__) for (; _(I); _(I)=0)
-#define let2(...) for (U8 _(I)=1; _(I);) def2_(let_, __VA_ARGS__) for (; _(I); _(I)=0)
+#define let_(...) if (__VA_ARGS__ true)
+#define let1(...) def1_(let_, __VA_ARGS__)
+#define let2(...) def2_(let_, __VA_ARGS__)
 
 // Usage example:
 //

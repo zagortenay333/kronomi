@@ -10,10 +10,6 @@ int main () {
     tmem_new(tm);
     Array<U32> a = array_new<U32>(tm);
 
-    struct Foo {
-        U32 *data;
-    };
-
     for (U32 i = 0; i < 10; ++i) {
         array_push(&a, i);
     }

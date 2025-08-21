@@ -4,9 +4,7 @@
 // Overview:
 // ---------
 //
-// A polymorphic dynamic array with bounds checking.
-//
-// All macros here eval their arguments only once.
+// A dynamic array with bounds checking.
 //
 // To ensure bounds checking, elements should only be accessed
 // with provided methods such as: array_get, array_set, etc...
@@ -17,10 +15,9 @@
 // Usage example:
 // --------------
 //
-//     Array(U64) a;
-//     array_init(&a, mem);
+//     Auto a = array_new<U64>(mem);
 //     array_push_n(&a, 42, 1, 420);
-//     array_iter (x, &a, *) if (*x == 420) *x = 1000;
+//     array_iter_ptr (x, &a) if (*x == 420) *x = 1000;
 //
 // Careful when mutating the array while looping over it.
 // If looping *forward* you can append to the array as well
@@ -30,8 +27,8 @@
 //     array_iter (x, &a) printf("[%lu] = %lu\n", ARRAY_IDX, x);
 //
 // =============================================================================
-#include "base/mem.h"
 #include <cstring>
+#include "base/mem.h"
 
 template <typename T>
 struct Array {
@@ -58,21 +55,21 @@ const U64 ARRAY_NIL_IDX = UINT64_MAX;
 #define array_iter_from(X, A, I)      let2(ARRAY, I_, A, I) ARRAY_ITER(X, I_, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
 #define array_iter_back(X, A)         let1(ARRAY, A)        ARRAY_ITER(X, ARRAY->count, (ARRAY_IDX-- > 0), /**/)
 #define array_iter_back_from(X, A, I) let2(ARRAY, I_, A, I) ARRAY_ITER(X, (ARRAY->count ? I_+1 : 0), (ARRAY_IDX-- > 0), /**/)
-#define ARRAY_ITER(X, F, C, INC)      for (U64 ARRAY_IDX=(F), _(I)=1; _(I); _(I)=0)\
+#define ARRAY_ITER(X, F, C, INC)      if (U64 ARRAY_IDX=(F); true)\
                                       for (AElem(ARRAY) X; (C) && (X = ARRAY->data[ARRAY_IDX], true); INC)
 
 #define array_iter_ptr(X, A)              let1(ARRAY, A)        ARRAY_ITER_PTR(X, 0, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
 #define array_iter_ptr_from(X, A, I)      let2(ARRAY, I_, A, I) ARRAY_ITER_PTR(X, I_, (ARRAY_IDX < ARRAY->count), ++ARRAY_IDX)
 #define array_iter_ptr_back(X, A)         let1(ARRAY, A)        ARRAY_ITER_PTR(X, ARRAY->count, (ARRAY_IDX-- > 0), /**/)
 #define array_iter_ptr_back_from(X, A, I) let2(ARRAY, I_, A, I) ARRAY_ITER_PTR(X, (ARRAY->count ? I_+1 : 0), (ARRAY_IDX-- > 0), /**/)
-#define ARRAY_ITER_PTR(X, F, C, INC)      for (U64 ARRAY_IDX=(F), _(I)=1; _(I); _(I)=0)\
+#define ARRAY_ITER_PTR(X, F, C, INC)      if (U64 ARRAY_IDX=(F); true)\
                                           for (AElem(ARRAY) *X; (C) && (X = &ARRAY->data[ARRAY_IDX], true); INC)
 
 // =============================================================================
 // Memory management:
 // =============================================================================
-template <typename T> U64 array_esize (Array<T> *a) { return sizeof(AElem(a)); }
-template <typename T> U64 array_size  (Array<T> *a) { return sizeof(T) * a->count; }
+template <typename T> U64 array_elem_size (Array<T> *a) { return sizeof(T); }
+template <typename T> U64 array_byte_size (Array<T> *a) { return sizeof(T) * a->count; }
 
 template <typename T>
 Void array_maybe_decrease_capacity (Array<T> *a) {
@@ -127,7 +124,7 @@ template <typename T> Void     array_init     (Array<T> *a, Mem *mem)          {
 template <typename T> Void     array_init_cap (Array<T> *a, Mem *mem, U64 cap) { array_init(a, mem); array_increase_capacity(a, cap); }
 template <typename T> Array<T> array_new      (Mem *mem)                       { Array<T> a; array_init(&a, mem); return a; }
 template <typename T> Array<T> array_new_cap  (Mem *mem, U64 cap)              { Array<T> a; array_init_cap(&a, mem, cap); return a; }
-template <typename T> Void     array_free     (Array<T> a)                     { mem_free(a->mem, .old_ptr=a->data, .old_size=array_size(a)); }
+template <typename T> Void     array_free     (Array<T> a)                     { mem_free(a->mem, .old_ptr=a->data, .old_size=array_byte_size(a)); }
 
 // =============================================================================
 // Access:
