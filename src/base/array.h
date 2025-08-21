@@ -232,12 +232,37 @@ T *array_find_ptr (Array<T> *a, F &f) {
     return r;
 }
 
-// template <typename T, typename F> array_find_remove(A, C)            array_iter (IT, A) if (C) { array_remove(ARRAY, ARRAY_IDX); break; }
-// template <typename T, typename F> array_find_remove_fast(A, C)       array_iter (IT, A) if (C) { array_remove_fast(ARRAY, ARRAY_IDX); break; }
-// template <typename T, typename F> array_find_remove_all_fast(A, C)   array_iter_back (IT, A) if (C) array_remove_fast(ARRAY, ARRAY_IDX);
-// template <typename T, typename F> array_find_replace(A, C, R)        array_iter (IT, A) if (C) { ARRAY->data[ARRAY_IDX] = R; break; }
-// template <typename T, typename F> array_find_replace_all(A, C, R)    array_iter (IT, A) if (C) ARRAY->data[ARRAY_IDX] = R;
-// template <typename T, typename F> array_find_remove_all(A, C)        ({ def1(A_, A); U64 _(N)=0; array_iter (IT, A_) if (!(C)) { A_->data[_(N)++]=IT; } A_->count=_(N); })
+template <typename T, typename F>
+Void array_find_remove (Array<T> *a, F &f) {
+    array_iter (it, a) if (f(it)) { array_remove(a, ARRAY_IDX); break; }
+}
+
+template <typename T, typename F>
+Void array_find_remove_fast (Array<T> *a, F &f) {
+    array_iter (it, a) if (f(it)) { array_remove_fast(a, ARRAY_IDX); break; }
+}
+
+template <typename T, typename F>
+Void array_find_remove_all_fast (Array<T> *a, F &f) {
+    array_iter_back (it, a) if (f(it)) array_remove_fast(a, ARRAY_IDX);
+}
+
+template <typename T, typename F>
+Void array_find_replace(Array<T> *a, F &f, T r) {
+    array_iter (it, a) if (f(it)) { a->data[ARRAY_IDX] = r; break; }
+}
+
+template <typename T, typename F>
+Void array_find_replace_all (Array<T> *a, F &f, T r) {
+    array_iter (it, a) if (f(it)) a->data[ARRAY_IDX] = r;
+}
+
+template <typename T, typename F>
+Void array_find_remove_all (Array<T> *a, F &f) {
+    U64 n = 0;
+    array_iter (it, a) if (! f(it)) { a->data[n++] = it; }
+    a->count = n;
+}
 
 template <typename T> Bool array_has(Array<T> *a, T e)  { return !!array_find_ref(a, [&](T *it){ return e == *it; }); }
 
