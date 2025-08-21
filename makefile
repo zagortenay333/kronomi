@@ -8,7 +8,7 @@ SRC_FILES     := $(shell find $(SRC_DIR) \
 OBJ_FILES     := $(SRC_FILES:.cpp=.o)
 DEP_FILES     := $(SRC_FILES:.cpp=.dep)
 EXE           := kronomi.exe
-CXX           := g++
+CXX           := clang++
 RELEASE_FLAGS := -fno-omit-frame-pointer -g -O2 -DBUILD_RELEASE=1 -DBUILD_DEBUG=0 -DNDEBUG -Wno-unused-parameter
 DEBUG_FLAGS   := -g3 -DBUILD_RELEASE=0 -DBUILD_DEBUG=1 -fno-omit-frame-pointer
 CPPFLAGS      := -std=c++20 -fno-delete-null-pointer-checks -fno-strict-aliasing -fwrapv -Werror=vla \
@@ -17,7 +17,7 @@ CPPFLAGS      := -std=c++20 -fno-delete-null-pointer-checks -fno-strict-aliasing
 LDFLAGS       := -fuse-ld=mold -lm -lGL -lX11 -lpthread -lXrandr -lXi -ldl
 
 ifeq ($(CXX), clang++)
-	CPPFLAGS  += -ferror-limit=2 -fno-spell-checking -Wno-initializer-overrides
+	CPPFLAGS  += -ferror-limit=2 -fno-spell-checking  -Wno-missing-designated-field-initializers -Wno-initializer-overrides
 	CXX_DEPGEN := clang++
 else ifeq ($(CXX), g++)
 	CPPFLAGS  += -fmax-errors=2 -Wno-empty-body -Wno-missing-field-initializers

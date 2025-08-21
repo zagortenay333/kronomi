@@ -3,10 +3,10 @@
 
 #if ASAN_ENABLED
     #include <sanitizer/asan_interface.h>
-    inl U64  adjust_align (U64 x)               { return max(8u, (x ?: MAX_ALIGN)); } // Max(a, 8) for asan poisoning.
-    inl Void poison_trace (U8 *a, U64 n, U8 *x) { if ((x >= a) && (x <= a+n)) print_stack_trace(); } // Disable ASLR for this.
-    inl Void unpoison     (Void *a, U64 n)      { __asan_unpoison_memory_region(a, n); }
-    inl Void poison       (Void *a, U64 n)      { __asan_poison_memory_region(a, n); poison_trace(cast(U8*,a), n, cast(U8*,0x0)); }
+    inline U64  adjust_align (U64 x)               { return max(8u, (x ?: MAX_ALIGN)); } // Max(a, 8) for asan poisoning.
+    inline Void poison_trace (U8 *a, U64 n, U8 *x) { if ((x >= a) && (x <= a+n)) print_stack_trace(); } // Disable ASLR for this.
+    inline Void unpoison     (Void *a, U64 n)      { __asan_unpoison_memory_region(a, n); }
+    inline Void poison       (Void *a, U64 n)      { __asan_poison_memory_region(a, n); poison_trace(cast(U8*,a), n, cast(U8*,0x0)); }
 #else
     #define adjust_align(A) ((A) ?: MAX_ALIGN)
     #define unpoison(...)
@@ -14,7 +14,7 @@
 #endif
 
 // =============================================================================
-// CMem:
+// GMem:
 // =============================================================================
 Void *mem_fn (GMem *ctx, MemOp op) {
     op.align = adjust_align(op.align);

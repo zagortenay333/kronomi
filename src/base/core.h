@@ -49,7 +49,7 @@ typedef Char          *CString;
 #define KB        (1024u)
 #define MB        (1024u*KB)
 #define GB        (1024u*MB)
-#define MAX_ALIGN (alignof(max_align_t))
+#define MAX_ALIGN (alignof(std::max_align_t))
 
 #define JOIN_(A, B) A ## B
 #define JOIN(A, B)  JOIN_(A, B)
@@ -61,7 +61,6 @@ typedef Char          *CString;
 #endif
 
 #define tls                thread_local
-#define Noreturn           [[noreturn]]
 #define Auto               auto
 #define Fmt(FMT, VA)       [[gnu::format(printf, FMT, VA)]]
 #define Type(X)            decltype(X)

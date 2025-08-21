@@ -1,5 +1,6 @@
 #include "base/core.h"
 #include "base/mem.h"
+#include "base/array.h"
 
 #include <stdio.h>
 
