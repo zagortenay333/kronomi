@@ -1,54 +1,34 @@
-#include "base/core.h"
-#include "base/mem.h"
-#include "base/array.h"
-#include "base/string.h"
+#include <gtk/gtk.h>
 
-#include <stdio.h>
-#include <vector>
+const char* __asan_default_options() { return "detect_leaks=0"; }
 
-int main () {
-    tmem_setup(&mem_root, 1*MB);
+static void print_hello (GtkWidget *widget, gpointer data) {
+  g_print ("Hello World\n");
+}
 
-    tmem_new(tm);
-    Array<U32> a = array_new<U32>(tm);
+static void activate (GtkApplication *app, gpointer user_data) {
+  GtkWidget *window;
+  GtkWidget *button;
 
-    for (U32 i = 0; i < 10; ++i) {
-        array_push(&a, i);
-    }
+  window = gtk_application_window_new (app);
+  gtk_window_set_title (GTK_WINDOW (window), "Hello");
+  gtk_window_set_default_size (GTK_WINDOW (window), 200, 200);
 
-    array_iter (x, &a) printf("%u ", x);
-    printf("\n");
+  button = gtk_button_new_with_label ("Hello World");
+  g_signal_connect (button, "clicked", G_CALLBACK (print_hello), NULL);
+  gtk_window_set_child (GTK_WINDOW (window), button);
 
-    array_reverse(&a);
-    array_iter (x, &a) printf("%u ", x);
-    printf("\n");
+  gtk_window_present (GTK_WINDOW (window));
+}
 
-    array_find_remove_all(&a, [&](Auto it){
-        return it % 2;
-    });
-    array_iter (x, &a) printf("%u ", x);
-    printf("\n");
+int main (int argc, char **argv) {
+  GtkApplication *app;
+  int status;
 
-    array_iter_ptr (x, &a) printf("%u ", *x);
-    printf("\n");
+  app = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
+  g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
+  status = g_application_run (G_APPLICATION (app), argc, argv);
+  g_object_unref (app);
 
-    array_iter_ptr_back (x, &a) printf("%u ", *x);
-    printf("\n");
-
-    array_push_n(&a, 9, 7, 5, 3, 1);
-    array_sort(&a);
-    array_iter_ptr (x, &a) printf("%u ", *x);
-    printf("\n");
-
-    Auto s = slice(&a);
-    array_reverse(&s);
-    array_iter_ptr (x, &a) printf("%u ", *x);
-    printf("\n");
-
-    String x = str("hello there sailor! how's it going?");
-
-    Auto tokens = array_new<String>(tm);
-    str_split(x, str(" "), false, false, &tokens);
-    array_iter (token, &tokens) printf("[%.*s] ", STR(token));
-    printf("\n");
+  return status;
 }
