@@ -257,6 +257,8 @@ I64 str_fuzzy_search (String needle, String haystack, Array<String> *tokens) {
 // =============================================================================
 // AString:
 // =============================================================================
+AString astr_new           (Mem *mem)                             { return array_new<Char>(mem); }
+AString astr_new_cap       (Mem *mem, U64 cap)                    { return array_new_cap<Char>(mem, cap); }
 Void    astr_print         (AString *a)                           { if (a->count) printf("%.*s", STR(*a)); }
 Void    astr_println       (AString *a)                           { if (a->count) printf("%.*s\n", STR(*a)); }
 CString astr_to_cstr       (AString *a)                           { astr_push_byte(a, 0); return a->data; }
@@ -270,7 +272,6 @@ Void    astr_push_str      (AString *a, String s)                 { array_push_m
 Void    astr_push_cstr     (AString *a, CString s)                { astr_push_str(a, String{ .data=const_cast<Char*>(s), .count=(U64)(strlen(s)) }); }
 Void    astr_push_cstr_nul (AString *a, CString s)                { astr_push_str(a, String{ .data=const_cast<Char*>(s), .count=(U64)(strlen(s) + 1) }); }
 Void    astr_push_2cstr    (AString *a, CString s1, CString s2)   { astr_push_cstr(a, s1); astr_push_cstr(a, s2); }
-Void    astr_push_fmt      Fmt(2, 3) (AString *a, CString f, ...) { astr_push_fmt_vam(a, f); }
 
 Void astr_push_fmt_va Fmt(2, 0) (AString *astr, CString fmt, VaList va) {
     VaList va2;
@@ -281,6 +282,22 @@ Void astr_push_fmt_va Fmt(2, 0) (AString *astr, CString fmt, VaList va) {
     vsnprintf(astr->data + astr->count, fmt_len + 1, fmt, va2);
     astr->count += fmt_len;
     va_end(va2);
+}
+
+Void astr_push_fmt Fmt(2, 3) (AString *astr, CString fmt, ...) {
+    VaList va;
+    va_start(va, fmt);
+    astr_push_fmt_va(astr, fmt, va);
+    va_end(va);
+}
+
+String astr_fmt Fmt(2, 3) (Mem *mem, CString fmt, ...) {
+    AString astr = astr_new(mem);
+    VaList va;
+    va_start(va, fmt);
+    astr_push_fmt_va(&astr, fmt, va);
+    va_end(va);
+    return astr_to_str(&astr);
 }
 
 // Append the str argument wrapped in double quotes with

@@ -45,11 +45,8 @@ String    str_copy              (Mem *, String);
 // =============================================================================
 typedef Array<Char> AString;
 
-#define astr_new(MEM)             ({ AString astr; array_init(&astr, MEM); astr; })
-#define astr_new_cap(MEM, CAP)    ({ AString astr; array_init_cap(&astr, MEM, CAP); astr; })
-#define astr_fmt(MEM, ...)        ({ AString astr = astr_new(MEM); astr_push_fmt(&astr, __VA_ARGS__); astr_to_str(&astr); })
-#define astr_push_fmt_vam(A, FMT) ({ def1(a, A); VaList va; va_start(va, FMT); astr_push_fmt_va(a, FMT, va); va_end(va); })
-
+AString astr_new             (Mem *);
+AString astr_new_cap             (Mem *);
 Void    astr_print           (AString *);
 Void    astr_println         (AString *);
 CString astr_to_cstr         (AString *);
@@ -69,3 +66,4 @@ Void    astr_push_cstr_nul   (AString *, CString);
 Void    astr_push_str_quoted (AString *, String);
 Void    astr_push_fmt_va     Fmt(2, 0) (AString *, CString fmt, VaList);
 Void    astr_push_fmt        Fmt(2, 3) (AString *, CString fmt, ...);
+String  astr_fmt             Fmt(2, 3) (Mem *, CString fmt, ...);

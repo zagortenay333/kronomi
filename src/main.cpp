@@ -63,4 +63,5 @@ int main () {
 
     map_remove(&map, 420lu);
     map_iter (e, &map) printf("hash=%lu key=%lu val=%s\n", e->hash, e->key, e->val);
+
 }
