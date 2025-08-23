@@ -12,11 +12,15 @@
 // Usage example:
 // --------------
 //
-//     Auto map = map_new<U64, CString>(mem);
-//     map_add(&map, 42, "Hello world!");
-//     map_add(&map, 420, "Foo bar baz!");
-//     map_iter (e, &map) printf("hash=%u key=%u val=%s\n", e->hash, e->key, e->val);
+//     Auto map = map_new<U64, CString>(tm, 0);
+//     map_add(&map, 42lu, "Hello world!");
+//     map_add(&map, 420lu, "Foo bar baz!");
+//     map_iter (e, &map) printf("hash=%lu key=%lu val=%s\n", e->hash, e->key, e->val);
 //
+// For custom keys either write two overloaded functions
+// named "hash" and "compare" which will be used by the
+// init code, or simply set the map->hash/compare fields
+// manually after initialization.
 // =============================================================================
 #include "base/core.h"
 
@@ -90,8 +94,8 @@ static Void map_rehash (Map<Key, Val> *map, U64 new_cap) {
     Auto old_map    = *map;
     map->tomb_count = 0;
     map->capacity   = new_cap;
-    map->entries    = mem_alloc(map->mem, U8, .zeroed=true, .size=(new_cap * sizeof(MapEntry<Key, Val>)));
-    map_iter (old, &old_map) *map_probe(map, 0, old->hash) = old;
+    map->entries    = mem_alloc(map->mem, Type(*map->entries), .zeroed=true, .size=(new_cap * sizeof(MapEntry<Key, Val>)));
+    map_iter (old, &old_map) *map_probe(map, 0lu, old->hash) = *old;
     mem_free(map->mem, .old_ptr=old_map.entries, .old_size=(old_map.capacity * sizeof(MapEntry<Key, Val>)));
 }
 
@@ -166,6 +170,13 @@ Void map_init (Map<Key, Val> *map, Mem *mem, U64 cap) {
     map->capacity   = cap;
     map->tomb_count = 0;
     map->entries    = mem_alloc(mem, Type(*map->entries), .zeroed=true, .size=(cap * sizeof(MapEntry<Key, Val>)));
-    map->hash_fn    = hash;
-    map->cmp_fn     = compare;
+    map->hash       = hash;
+    map->compare    = compare;
+}
+
+template <typename Key, typename Val>
+Map<Key, Val> map_new (Mem *mem, U64 cap) {
+    Map<Key, Val> map;
+    map_init(&map, mem, cap);
+    return map;
 }

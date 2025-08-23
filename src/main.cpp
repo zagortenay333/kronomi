@@ -52,4 +52,9 @@ int main () {
     str_split(x, str(" "), false, false, &tokens);
     array_iter (token, &tokens) printf("[%.*s] ", STR(token));
     printf("\n");
+
+    Auto map = map_new<U64, CString>(tm, 0);
+    map_add(&map, 42lu, "Hello world!");
+    map_add(&map, 420lu, "Foo bar baz!");
+    map_iter (e, &map) printf("hash=%lu key=%lu val=%s\n", e->hash, e->key, e->val);
 }
