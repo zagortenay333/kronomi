@@ -7,7 +7,7 @@ SRC_FILES     := $(shell find $(SRC_DIR) \
 				   -iname *.cpp)
 OBJ_FILES     := $(SRC_FILES:.cpp=.o)
 DEP_FILES     := $(SRC_FILES:.cpp=.dep)
-EXE           := kronomi.exe
+EXE           := kronomi.bin
 CXX           := g++
 RELEASE_FLAGS := -fno-omit-frame-pointer -g -O2 -DBUILD_RELEASE=1 -DBUILD_DEBUG=0 -DNDEBUG -Wno-unused-parameter
 DEBUG_FLAGS   := -g3 -DBUILD_RELEASE=0 -DBUILD_DEBUG=1 -fno-omit-frame-pointer

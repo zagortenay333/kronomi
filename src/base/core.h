@@ -63,7 +63,7 @@ typedef const Char    *CString;
 #define tls                thread_local
 #define Auto               auto
 #define Fmt(FMT, VA)       [[gnu::format(printf, FMT, VA)]]
-#define Type(X)            std::remove_reference_t<decltype(X)>
+#define Type(...)          std::remove_reference_t<decltype(__VA_ARGS__)>
 #define panic()            __builtin_trap()
 #define assert_static(...) static_assert(__VA_ARGS__)
 #define badpath            panic()
@@ -165,10 +165,10 @@ struct Defer {
 U8 count_digits (U64);
 
 // Integer hashing.
-U64 hash_u32 (U32);
-U64 hash_u64 (U64);
-U64 hash_i32 (I32);
-U64 hash_i64 (I64);
+U64 hash (U32);
+U64 hash (U64);
+U64 hash (I32);
+U64 hash (I64);
 
 // Bitwise left rotate.
 U8  rotl8  (U8  x, U64 r);

@@ -16,10 +16,10 @@ U64 padding_to_align (U64 x, U64 a) {
     return (a - (x & (a-1))) & (a-1);
 }
 
-U64 hash_u32 (U32 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=4 }); }
-U64 hash_u64 (U64 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=8 }); }
-U64 hash_i32 (I32 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=4 }); }
-U64 hash_i64 (I64 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=8 }); }
+U64 hash (U32 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=4 }); }
+U64 hash (U64 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=8 }); }
+U64 hash (I32 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=4 }); }
+U64 hash (I64 n) { return str_hash(String{ .data=reinterpret_cast<Char*>(&n), .count=8 }); }
 
 U8  rotl8  (U8  x, U64 r) { r &= 7;  return (x << r) | (x >> ((8-r) & 7));   }
 U32 rotl32 (U32 x, U64 r) { r &= 31; return (x << r) | (x >> ((32-r) & 31)); }
