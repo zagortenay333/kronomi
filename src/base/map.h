@@ -3,6 +3,20 @@
 // =============================================================================
 // Overview:
 // ---------
+//
+// An open addressing hash table with quadratic probing
+// via triangular numbers.
+//
+// This data structure is only suitable for POD types.
+//
+// Usage example:
+// --------------
+//
+//     Auto map = map_new<U64, CString>(mem);
+//     map_add(&map, 42, "Hello world!");
+//     map_add(&map, 420, "Foo bar baz!");
+//     map_iter (e, &map) printf("hash=%u key=%u val=%s\n", e->hash, e->key, e->val);
+//
 // =============================================================================
 #include "base/core.h"
 
