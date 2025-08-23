@@ -122,7 +122,26 @@ Void map_clear (Map<Key, Val> *map) {
 }
 
 template <typename Key, typename Val>
-Val map_get (Map<Key, Val> *map, Key key) {
+Val map_get_assert (Map<Key, Val> *map, Key key) {
+    U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
+    Auto entry = map_probe(map, key, hash);
+    assert_always(entry->hash >= MAP_HASH_OF_FILLED_ENTRY);
+    return entry->val;
+}
+
+template <typename Key, typename Val>
+Bool map_get (Map<Key, Val> *map, Key key, Val *out_val) {
+    U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
+    Auto entry = map_probe(map, key, hash);
+    if (entry->hash >= MAP_HASH_OF_FILLED_ENTRY) {
+        if (out_val) *out_val = entry->val;
+        return true;
+    }
+    return false;
+}
+
+template <typename Key, typename Val>
+Val map_get_ptr (Map<Key, Val> *map, Key key) {
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
     Auto entry = map_probe(map, key, hash);
     return (entry->hash < MAP_HASH_OF_FILLED_ENTRY) ? 0 : entry->val;

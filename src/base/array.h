@@ -66,6 +66,8 @@ const U64 ARRAY_NIL_IDX = UINT64_MAX;
 #define ARRAY_ITER_PTR(X, F, C, INC)      if (U64 ARRAY_IDX=(F); true)\
                                           for (Elemv(ARRAY) *X; (C) && (X = &ARRAY->data[ARRAY_IDX], true); INC)
 
+#define ARRAY_ITER_DONE (ARRAY_IDX == (ARRAY->count - 1))
+
 // =============================================================================
 // Memory management:
 // =============================================================================
@@ -251,8 +253,8 @@ Bool array_has (T *a, Elem(T) e)  {
 // =============================================================================
 // Insertion:
 // =============================================================================
-#define array_push_lit(A, ...)   array_push(A, Elemv(A){__VA_ARGS__})
-#define array_insert_lit(A, ...) array_insert(A, Elemv(A){__VA_ARGS__})
+#define array_push_lit(A, ...)      array_push(A, Elemv(A){__VA_ARGS__})
+#define array_insert_lit(A, I, ...) array_insert(A, Elemv(A){__VA_ARGS__}, I)
 
 #define array_push_n(A, ...) do {\
     Elemv(A) _(E)[] = {__VA_ARGS__};\
@@ -311,5 +313,5 @@ Void array_insert_many (T *a, U elems, U64 idx) {
 }
 
 template <typename T> Void array_push   (T *a, Elem(T) e) { *array_push_slot(a) = e; }
-template <typename T> Void array_insert (T *a, Elem(T) e) { *array_insert_slot(a) = e; }
+template <typename T> Void array_insert (T *a, Elem(T) e, U64 idx) { *array_insert_slot(a, idx) = e; }
 template <typename T> Void array_push_if_unique (T *a, Elem(T) e) { if (! array_has(a, e)) array_push(a, e); }

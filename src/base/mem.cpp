@@ -14,9 +14,9 @@
 #endif
 
 // =============================================================================
-// GMem:
+// CMem:
 // =============================================================================
-Void *mem_fn (GMem *ctx, MemOp op) {
+Void *mem_fn (CMem *ctx, MemOp op) {
     op.align = adjust_align(op.align);
 
     Void *result = 0;
@@ -50,8 +50,12 @@ Void *mem_fn (GMem *ctx, MemOp op) {
     return result;
 }
 
-Void *gmem_fn (Void *ctx, MemOp op) {
-    return mem_fn(static_cast<GMem*>(ctx), op);
+Void *cmem_fn (Void *ctx, MemOp op) {
+    return mem_fn(static_cast<CMem*>(ctx), op);
+}
+
+Mem cmem_new () {
+    return { cmem_fn };
 }
 
 // =============================================================================
@@ -240,5 +244,7 @@ Void tmem_pin_pop (U8 prev_flags) {
     tmem_ring.pin_flags = prev_flags;
 }
 
-Mem mem_root = { gmem_fn };
-
+// =============================================================================
+// Root:
+// =============================================================================
+Mem mem_root = { cmem_fn };

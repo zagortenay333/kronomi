@@ -58,7 +58,7 @@ int main () {
     map_add(&map, 420lu, "Foo bar baz!");
     map_iter (e, &map) printf("hash=%lu key=%lu val=%s\n", e->hash, e->key, e->val);
 
-    Auto val = map_get(&map, 420lu);
+    Auto val = map_get_assert(&map, 420lu);
     printf("======== [%s] deleted\n", val);
 
     map_remove(&map, 420lu);

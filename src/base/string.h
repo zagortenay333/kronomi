@@ -63,7 +63,6 @@ Void    astr_push_str        (AString *, String);
 Void    astr_push_cstr       (AString *, CString);
 Void    astr_push_2cstr      (AString *, CString, CString);
 Void    astr_push_cstr_nul   (AString *, CString);
-Void    astr_push_str_quoted (AString *, String);
 Void    astr_push_fmt_va     Fmt(2, 0) (AString *, CString fmt, VaList);
 Void    astr_push_fmt        Fmt(2, 3) (AString *, CString fmt, ...);
 String  astr_fmt             Fmt(2, 3) (Mem *, CString fmt, ...);

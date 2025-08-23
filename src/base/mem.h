@@ -51,13 +51,14 @@ inline Void *mem_fn (Mem *ctx, MemOp op) { return ctx->fn(ctx, op); }
 #define mem_free(M, ...)      mem_fn(M, MemOp{.tag=MEM_OP_FREE, __VA_ARGS__ })
 
 // =============================================================================
-// GMem: wrapper around libc functions malloc, realloc, ...
+// CMem: wrapper around libc functions malloc, realloc, ...
 // =============================================================================
-struct GMem {
-    Mem mem;
+struct CMem {
+    Mem base;
 };
 
-Void *mem_fn (GMem *, MemOp);
+Void *mem_fn   (CMem *, MemOp);
+Mem   cmem_new ();
 
 // =============================================================================
 // Arena:

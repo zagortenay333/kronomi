@@ -1,4 +1,3 @@
-#if 1
 #include <errno.h>
 #include <stdio.h>
 #include "base/string.h"
@@ -299,37 +298,3 @@ String astr_fmt Fmt(2, 3) (Mem *mem, CString fmt, ...) {
     va_end(va);
     return astr_to_str(&astr);
 }
-
-// Append the str argument wrapped in double quotes with
-// any double quotes within str escaped with a backslash:
-//
-//     (foo "bar" baz)  ->  ("foo \"bar\" baz")
-//
-Void astr_push_str_quoted (AString *astr, String str) {
-    astr_push_byte(astr, '"');
-
-    Bool escaped = false;
-    String chunk = { .data = str.data };
-
-    array_iter (c, &str) {
-        if (escaped) {
-            escaped = false;
-            chunk.count++;
-        } else if (c == '"') {
-            astr_push_str(astr, chunk);
-            astr_push_byte(astr, '\\');
-            astr_push_byte(astr, '"');
-            chunk.count = 0;
-            chunk.data = array_try_ref(&str, ARRAY_IDX + 1);
-        } else if (c == '\\') {
-            escaped = true;
-            chunk.count++;
-        } else {
-            chunk.count++;
-        }
-    }
-
-    astr_push_str(astr, chunk);
-    astr_push_byte(astr, '"');
-}
-#endif
