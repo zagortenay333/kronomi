@@ -149,7 +149,7 @@ Bool map_add (Map<Key, Val> *map, Key key, Val val) {
 template <typename Key, typename Val>
 Bool map_remove (Map<Key, Val> *map, Key key) {
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
-    Auto entry = probe(map, key, hash);
+    Auto entry = map_probe(map, key, hash);
     Bool found = (entry->hash >= MAP_HASH_OF_FILLED_ENTRY);
 
     if (found) {
