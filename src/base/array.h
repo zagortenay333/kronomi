@@ -312,6 +312,6 @@ Void array_insert_many (T *a, U elems, U64 idx) {
     }
 }
 
-template <typename T> Void array_push   (T *a, Elem(T) e) { *array_push_slot(a) = e; }
+template <typename T> Void array_push   (T *a, Elem(T) e)          { *array_push_slot(a) = e; }
 template <typename T> Void array_insert (T *a, Elem(T) e, U64 idx) { *array_insert_slot(a, idx) = e; }
-template <typename T> Void array_push_if_unique (T *a, Elem(T) e) { if (! array_has(a, e)) array_push(a, e); }
+template <typename T> Void array_push_if_unique (T *a, Elem(T) e)  { if (! array_has(a, e)) array_push(a, e); }

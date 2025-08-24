@@ -44,7 +44,7 @@ struct Mem {
 extern Mem mem_root;
 inline Void *mem_fn (Mem *ctx, MemOp op) { return ctx->fn(ctx, op); }
 
-#define mem_new(M, T)         static_cast<T*>(mem_fn(M, MemOp{.tag=MEM_OP_ALLOC, .size=sizeof(T), .align=alignof(T) }))
+#define mem_new(M, T)         static_cast<T*>(mem_fn(M, MemOp{.tag=MEM_OP_ALLOC, .zeroed=true, .size=sizeof(T), .align=alignof(T) }))
 #define mem_alloc(M, T, ...)  static_cast<T*>(mem_fn(M, MemOp{.tag=MEM_OP_ALLOC, __VA_ARGS__ }))
 #define mem_grow(M, T, ...)   static_cast<T*>(mem_fn(M, MemOp{.tag=MEM_OP_GROW, __VA_ARGS__ }))
 #define mem_shrink(M, T, ...) static_cast<T*>(mem_fn(M, MemOp{.tag=MEM_OP_SHRINK, __VA_ARGS__ }))

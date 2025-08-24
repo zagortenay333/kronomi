@@ -19,7 +19,8 @@ Void push_stack_trace (AString *a, U64 indent, U64 caller_frames_to_skip) {
     // __asan_get_alloc_stack can return a stack trace for the
     // allocation at address 'frames.data'.
     Mem cmem = cmem_new();
-    auto frames = array_new_cap<Void*>(&cmem, 32);
+    Auto frames = array_new_cap<Void*>(&cmem, 32);
+    defer { array_free(&frames); };
     frames.count = __asan_get_alloc_stack(frames.data, frames.data, 32 * array_elem_size(&frames), /*@todo*/0);
 
     tmem_new(tm);
@@ -46,9 +47,7 @@ Void push_stack_trace (AString *a, U64 indent, U64 caller_frames_to_skip) {
                 if (str_ends_with(line, str("main"))) goto brk;
             }
         }
-    } brk:
-
-    array_free(&frames); // @todo Use defer in C2y.
+    } brk:;
 }
 
 String get_stack_trace (Mem *mem, U64 indent, U64 frames_to_skip) {
@@ -113,9 +112,9 @@ LogScope *log_scope_start (Bool flush_iterables_on_exit) {
     return scope;
 }
 
-Void log_scope_end (LogScope **) {
+Void log_scope_end () {
     LogScope *scope = log_data->scope;
-    if (log_data->open_msg_data) log_msg_end(0);
+    if (log_data->open_msg_data) log_msg_end();
     if (scope->flush_iter) astr_print(&scope->iterable_data);
     astr_print(&scope->raw_data);
     log_data->scope = scope->prev;
@@ -123,7 +122,7 @@ Void log_scope_end (LogScope **) {
 }
 
 Void log_scope_end_all () {
-    while (log_data->scope) log_scope_end(0);
+    while (log_data->scope) log_scope_end();
 }
 
 AString *log_msg_start (LogMsgTag tag, CString user_tag, Bool iterable) {
@@ -154,7 +153,7 @@ AString *log_msg_start (LogMsgTag tag, CString user_tag, Bool iterable) {
     return data;
 }
 
-Void log_msg_end (AString **) {
+Void log_msg_end () {
     assert_dbg(log_data->open_msg_data);
 
     LogScope *s = log_data->scope;
@@ -167,6 +166,15 @@ Void log_msg_end (AString **) {
     }
 
     log_data->open_msg_data = 0;
+}
+
+Void log_msg_fmt (LogMsgTag tag, CString header, Bool iterable, CString fmt, ...) {
+    log_msg(msg, tag, header, iterable);
+    VaList va;
+    va_start(va, fmt);
+    astr_push_fmt_va(msg, fmt, va);
+    va_end(va);
+    astr_push_byte(msg, '\n'); 
 }
 
 // =============================================================================

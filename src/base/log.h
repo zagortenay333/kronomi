@@ -50,7 +50,7 @@
 //     log_msg(msg, LOG_PLAIN, "", 0); // Var 'msg' freed at scope exit.
 //     astr_push_cstr(msg, "\nIterable messages:\n");
 //     
-//     array_iter (it, &ls->iter, *) {
+//     array_iter_ptr (it, &ls->iter) {
 //         String body = str_slice(astr_to_str(&ls->iterable_data), it->body_offset, it->trace_offset - it->body_offset - 1);
 //         astr_push_fmt(msg, "    [%s] [%.*s] [%.*s]\n", log_tag_str[it->tag], STR(it->user_tag), STR(body));
 //     }
@@ -111,16 +111,21 @@ extern tls Log *log_data;
 extern CString  log_tag_str  [LOG_TAG_COUNT];
 extern CString  log_tag_ansi [LOG_TAG_COUNT];
 
-#define log_scope(N, F)           cleanup(log_scope_end) LogScope *N = log_scope_start(F);
-#define log_msg(N, T, U, I)       cleanup(log_msg_end)   AString  *N = log_msg_start(T, U, I);
-#define log_msg_fmt(T, U, I, ...) ({ log_msg(_(N), T, U, I); astr_push_fmt(_(N), __VA_ARGS__); astr_push_byte(_(N), '\n'); })
+#define log_scope(N, F)\
+    LogScope *N = log_scope_start(F);\
+    defer { log_scope_end(); };
+
+#define log_msg(N, T, U, I)\
+    AString  *N = log_msg_start(T, U, I);\
+    defer { log_msg_end(); };
 
 Void      log_setup         (Mem *, U64);
 LogScope *log_scope_start   (Bool);
-Void      log_scope_end     (LogScope **);
+Void      log_scope_end     ();
 Void      log_scope_end_all ();
 AString  *log_msg_start     (LogMsgTag, CString, Bool);
-Void      log_msg_end       (AString **);
+Void      log_msg_end       ();
+Void      log_msg_fmt       (LogMsgTag, CString, Bool, CString fmt, ...);
 
 // =============================================================================
 // SrcLog:

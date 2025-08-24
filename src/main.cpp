@@ -3,12 +3,14 @@
 #include "base/array.h"
 #include "base/map.h"
 #include "base/string.h"
+#include "base/log.h"
 
 #include <stdio.h>
 #include <vector>
 
 int main () {
     tmem_setup(&mem_root, 1*MB);
+    log_setup(&mem_root, 4*KB);
 
     tmem_new(tm);
     Array<U32> a = array_new<U32>(tm);
@@ -64,4 +66,20 @@ int main () {
     map_remove(&map, 420lu);
     map_iter (e, &map) printf("hash=%lu key=%lu val=%s\n", e->hash, e->key, e->val);
 
+    {
+        log_scope(ls, 1); // Var 'ls' closed at scope exit.
+        
+        log_msg_fmt(LOG_NOTE, "#0", 1, "A note.");
+        log_msg_fmt(LOG_WARNING, "#1", 1, "A warning.");
+        log_msg_fmt(LOG_NOTE, "#2", 0, "Non-iterable note.");
+        log_msg_fmt(LOG_ERROR, "#3", 1, "An error.");
+        
+        log_msg(msg, LOG_PLAIN, "", 0); // Var 'msg' freed at scope exit.
+        astr_push_cstr(msg, "\nIterable messages:\n");
+        
+        array_iter_ptr (it, &ls->iter) {
+            String body = str_slice(astr_to_str(&ls->iterable_data), it->body_offset, it->trace_offset - it->body_offset - 1);
+            astr_push_fmt(msg, "    [%s] [%.*s] [%.*s]\n", log_tag_str[it->tag], STR(it->user_tag), STR(body));
+        }
+    }
 }
