@@ -14,9 +14,6 @@
 // Usage example:
 // --------------
 //
-// For convenience use the mem_* macros instead of Mem.op which
-// pass the Mem struct itself as the context argument to Mem.op:
-//
 //     Auto foo = mem_alloc(mem, Foo, .zeroed=true, .size=(3 * sizeof(Foo)));
 //     Auto bar = mem_new(mem, Bar);
 //
