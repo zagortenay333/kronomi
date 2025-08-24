@@ -16,7 +16,9 @@ String    str                   (CString);
 U64       istr_hash             (IString *);
 U64       cstr_hash             (CString);
 U64       str_hash              (String);
-U64       str_hash_seed         (String str, U64 seed);
+U64       hash                  (IString *);
+U64       hash                  (CString);
+U64       hash                  (String);
 Bool      cstr_match            (CString, CString);
 Bool      str_match             (String, String);
 Bool      str_starts_with       (String, String prefix);
@@ -40,13 +42,15 @@ Void      str_split             (String, String seps, Bool keep_seps, Bool keep_
 I64       str_fuzzy_search      (String needle, String haystack, Array<String> *);
 String    str_copy              (Mem *, String);
 
+inline Bool compare (String a, String b) { return str_match(a, b); }
+
 // =============================================================================
 // AString: Wrapper around Array for string building.
 // =============================================================================
 typedef Array<Char> AString;
 
 AString astr_new             (Mem *);
-AString astr_new_cap             (Mem *);
+AString astr_new_cap         (Mem *);
 Void    astr_print           (AString *);
 Void    astr_println         (AString *);
 CString astr_to_cstr         (AString *);

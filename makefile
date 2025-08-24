@@ -3,8 +3,8 @@
 
 SRC_DIR       := src
 SRC_FILES     := $(shell find $(SRC_DIR) \
-				   -path $(SRC_DIR)"/os/linux" -prune -false -o \
-				   -iname *.cpp)
+				 -path $(SRC_DIR)"/os/linux" -prune -false -o \
+				 -iname *.cpp)
 OBJ_FILES     := $(SRC_FILES:.cpp=.o)
 DEP_FILES     := $(SRC_FILES:.cpp=.dep)
 EXE           := kronomi.bin
@@ -14,14 +14,14 @@ DEBUG_FLAGS   := -g3 -DBUILD_RELEASE=0 -DBUILD_DEBUG=1 -fno-omit-frame-pointer
 CPPFLAGS      := -std=c++20 -fno-delete-null-pointer-checks -fno-strict-aliasing -fwrapv -Werror=vla \
                  -Wall -Wextra -Wimplicit-fallthrough -Wswitch -Wno-unused-function -Wno-unused-value -Wno-unused-parameter -Wno-missing-braces \
 				 -I$(SRC_DIR) -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=600 \
-                 $$(pkg-config --cflags --libs gtk4) 
-LDFLAGS       := -fuse-ld=mold -lm -lGL -lX11 -lpthread -lXrandr -lXi -ldl
+                 $$(pkg-config --cflags gtk4) 
+LDFLAGS       := -fuse-ld=mold -lm $$(pkg-config --libs gtk4) 
 
 ifeq ($(CXX), clang++)
 	CPPFLAGS  += -ferror-limit=2 -fno-spell-checking  -Wno-missing-designated-field-initializers -Wno-initializer-overrides
 	CXX_DEPGEN := clang++
 else ifeq ($(CXX), g++)
-	CPPFLAGS  += -fmax-errors=2 -Wno-empty-body -Wno-missing-field-initializers
+	CPPFLAGS  += -fmax-errors=200 -Wno-empty-body -Wno-missing-field-initializers
 	CXX_DEPGEN := g++
 endif
 
@@ -36,8 +36,8 @@ endif
 $(EXE): $(OBJ_FILES)
 	@$(CXX) $(CPPFLAGS) $^ -o $@ $(LDFLAGS)
 
-release: CPPFLAGS += $(RELEASE_FLAGS) -Wno-unused -g # -flto
-release: LDFLAGS  += # -flto
+release: CPPFLAGS += $(RELEASE_FLAGS) -Wno-unused -g -flto
+release: LDFLAGS  += -flto
 release: $(EXE)
 
 debug: CPPFLAGS += $(DEBUG_FLAGS)

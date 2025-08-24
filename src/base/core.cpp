@@ -1,6 +1,6 @@
 #include "base/core.h"
 #include "base/string.h"
-// #include "os/time.h"
+#include "os/time.h"
 
 assert_static(sizeof(F32) == 4);
 assert_static(sizeof(F64) == 8);
@@ -35,7 +35,6 @@ U8  sat_mul8  (U8 x, U8 y)   { U8 z;  return __builtin_mul_overflow(x, y, &z) ? 
 U32 sat_mul32 (U32 x, U32 y) { U32 z; return __builtin_mul_overflow(x, y, &z) ? UINT32_MAX : z; }
 U64 sat_mul64 (U64 x, U64 y) { U64 z; return __builtin_mul_overflow(x, y, &z) ? UINT64_MAX : z; }
 
-#if 0 // @todo
 // A pseudo random number generator.
 // The xorshift64_state must not be initted to zero.
 tls U64 xorshift64_state;
@@ -58,4 +57,3 @@ U64 random_range (U64 l, U64 u) {
     do r = random_u64(); while (r < ((-u) % u));
     return (r % u) + l;
 }
-#endif

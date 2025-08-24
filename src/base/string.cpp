@@ -21,6 +21,10 @@ U64 str_hash (String str) {
     return h;
 }
 
+U64 hash (IString *istr) { return istr_hash(istr); }
+U64 hash (CString cstr)  { return cstr_hash(cstr); }
+U64 hash (String str)    { return str_hash(str); }
+
 Bool str_starts_with (String str, String prefix) {
     if (str.count < prefix.count) return false;
     str.count = prefix.count;

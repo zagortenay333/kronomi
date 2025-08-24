@@ -70,9 +70,8 @@ inline Bool compare (U32 a, U32 b) { return a == b; }
 inline Bool compare (U64 a, U64 b) { return a == b; }
 
 // Performs quadratic probing via triangular numbers.
-// Pass key == 0 to only look for empty slots.
 template <typename Key, typename Val>
-MapEntry<Key, Val> *map_probe (Map<Key, Val> *map, Key key, U64 hash) {
+MapEntry<Key, Val> *map_probe (Map<Key, Val> *map, Bool empty_only, Key key, U64 hash) {
     assert_dbg(is_pow2(map->capacity));
     assert_dbg(hash >= MAP_HASH_OF_FILLED_ENTRY);
 
@@ -83,7 +82,7 @@ MapEntry<Key, Val> *map_probe (Map<Key, Val> *map, Key key, U64 hash) {
     while (true) {
         Auto entry = &map->entries[idx];
         if (entry->hash == MAP_HASH_OF_EMPTY_ENTRY) return entry;
-        if (key && (hash == entry->hash) && map->compare(key, entry->key)) return entry;
+        if (!empty_only && (hash == entry->hash) && map->compare(key, entry->key)) return entry;
         idx  = (idx + inc) & mask;
         inc += 1;
     }
@@ -95,7 +94,7 @@ static Void map_rehash (Map<Key, Val> *map, U64 new_cap) {
     map->tomb_count = 0;
     map->capacity   = new_cap;
     map->entries    = mem_alloc(map->mem, Type(*map->entries), .zeroed=true, .size=(new_cap * sizeof(MapEntry<Key, Val>)));
-    map_iter (old, &old_map) *map_probe(map, 0lu, old->hash) = *old;
+    map_iter (old, &old_map) *map_probe(map, true, old->key, old->hash) = *old;
     mem_free(map->mem, .old_ptr=old_map.entries, .old_size=(old_map.capacity * sizeof(MapEntry<Key, Val>)));
 }
 
@@ -124,7 +123,7 @@ Void map_clear (Map<Key, Val> *map) {
 template <typename Key, typename Val>
 Val map_get_assert (Map<Key, Val> *map, Key key) {
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
-    Auto entry = map_probe(map, key, hash);
+    Auto entry = map_probe(map, false, key, hash);
     assert_always(entry->hash >= MAP_HASH_OF_FILLED_ENTRY);
     return entry->val;
 }
@@ -132,7 +131,7 @@ Val map_get_assert (Map<Key, Val> *map, Key key) {
 template <typename Key, typename Val>
 Bool map_get (Map<Key, Val> *map, Key key, Val *out_val) {
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
-    Auto entry = map_probe(map, key, hash);
+    Auto entry = map_probe(map, false, key, hash);
     if (entry->hash >= MAP_HASH_OF_FILLED_ENTRY) {
         if (out_val) *out_val = entry->val;
         return true;
@@ -143,7 +142,7 @@ Bool map_get (Map<Key, Val> *map, Key key, Val *out_val) {
 template <typename Key, typename Val>
 Val map_get_ptr (Map<Key, Val> *map, Key key) {
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
-    Auto entry = map_probe(map, key, hash);
+    Auto entry = map_probe(map, false, key, hash);
     return (entry->hash < MAP_HASH_OF_FILLED_ENTRY) ? 0 : entry->val;
 }
 
@@ -152,7 +151,7 @@ Bool map_add (Map<Key, Val> *map, Key key, Val val) {
     map_maybe_grow(map);
 
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
-    Auto entry = map_probe(map, key, hash);
+    Auto entry = map_probe(map, false, key, hash);
     Bool found = (entry->hash >= MAP_HASH_OF_FILLED_ENTRY);
 
     if (! found) {
@@ -168,7 +167,7 @@ Bool map_add (Map<Key, Val> *map, Key key, Val val) {
 template <typename Key, typename Val>
 Bool map_remove (Map<Key, Val> *map, Key key) {
     U64 hash   = max(map->hash(key), MAP_HASH_OF_FILLED_ENTRY);
-    Auto entry = map_probe(map, key, hash);
+    Auto entry = map_probe(map, false, key, hash);
     Bool found = (entry->hash >= MAP_HASH_OF_FILLED_ENTRY);
 
     if (found) {
