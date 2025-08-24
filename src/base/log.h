@@ -19,7 +19,7 @@
     Void    print_stack_trace     ();
 #else
     #define build_stack_trace(MEM, INDENT, ...) astr_fmt(MEM, "%*s%s " TERM_CYAN("%s") ":%i\n", cast(Int,INDENT), "", __func__, __FILE__, __LINE__)
-    #define get_stack_trace(MEM, INDENT, ...)   ({ AString a = astr_new(MEM); build_stack_trace(&a, INDENT); astr_to_str(&a); })
+    #define get_stack_trace(MEM, INDENT, ...)   do{ AString a = astr_new(MEM); build_stack_trace(&a, INDENT); astr_to_str(&a); }while(0)
     #define print_stack_trace_fmt(...)
     #define print_stack_trace(...)
 #endif

@@ -55,7 +55,7 @@ typedef const Char    *CString;
 #define JOIN(A, B)  JOIN_(A, B)
 
 #if BUILD_DEBUG
-    #define assert_dbg(...) ({ if (!(__VA_ARGS__)) panic(); })
+    #define assert_dbg(...) do { if (!(__VA_ARGS__)) panic(); } while(0)
 #else
     #define assert_dbg(...)
 #endif
@@ -183,7 +183,7 @@ U64 padding_to_align (U64 x, U64 a);
     #define atomic_inc_load(X)           (__atomic_fetch_add(X, 1, __ATOMIC_SEQ_CST) + 1)
     #define atomic_dec_load(X)           (__atomic_fetch_add(X, 1, __ATOMIC_SEQ_CST) - 1)
     #define atomic_exchange(X, C)        __atomic_exchange_n(X, C, __ATOMIC_SEQ_CST)
-    #define atomic_cmp_exchange(X, E, D) ({ def3(x, e, d, X, E, D); __atomic_compare_exchange_n(x, &e, d, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST); e; })
+    #define atomic_cmp_exchange(X, E, D) do { def3(x, e, d, X, E, D); __atomic_compare_exchange_n(x, &e, d, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST); e; } while(0)
 #else
     #error "No atomics."
 #endif
