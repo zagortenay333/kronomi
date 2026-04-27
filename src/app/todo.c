@@ -109,7 +109,6 @@ istruct (View) {
         } deck_browser;
 
         struct {
-            I64 heatmap_year;
             U64 show_more_idx;
             Buf *filter_buf;
             Date since;
@@ -121,6 +120,8 @@ istruct (View) {
             Seconds all_time;
             Seconds custom;
             Array(FilteredTrackerSlot) filtered_slots;
+            I64 heatmap_year;
+            Map(String, Seconds) heatmap_data;
         } time_tracker;
     };
 };
@@ -1424,6 +1425,12 @@ static Void compute_time_tracker_stats () {
                 if (os_date_cmp(t->date, start_of_month) != -1 && tcmp != 1) view->month = sat_add64(view->month, t->seconds);
                 if (os_date_cmp(t->date, start_of_year) != -1 && tcmp != 1) view->year = sat_add64(view->year, t->seconds);
                 if (os_date_cmp(t->date, since) != -1 && os_date_cmp(t->date, until) != 1) view->custom = sat_add64(view->custom, t->seconds);
+                if (t->date.year == view->heatmap_year) {
+                    String date_str = os_date_to_str(context->view_mem, t->date);
+                    Seconds total = 0;
+                    map_get(&view->heatmap_data, date_str, &total);
+                    map_add(&view->heatmap_data, date_str, sat_add64(total, t->seconds));
+                }
             }
         }
     }
@@ -1505,16 +1512,18 @@ static Void build_heatmap () {
                                     ui_tag("cell");
 
                                     Date date = {year, month, day, wday};
+                                    String date_str = os_date_to_str(tm, date);
                                     Seconds total = 0;
+                                    map_get(&view->heatmap_data, date_str, &total);
 
-                                    array_iter (it, &view->filtered_slots, *) {
-                                        TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
-                                        array_iter (it, &slot->time, *) {
-                                            if (os_date_cmp(it->date, date) == 0) {
-                                                total = sat_add64(total, it->seconds);
-                                            }
-                                        }
-                                    }
+                                    // array_iter (it, &view->filtered_slots, *) {
+                                        // TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
+                                        // array_iter (it, &slot->time, *) {
+                                            // if (os_date_cmp(it->date, date) == 0) {
+                                                // total = sat_add64(total, it->seconds);
+                                            // }
+                                        // }
+                                    // }
 
                                     Vec4 cell_color;
 
@@ -2138,6 +2147,7 @@ static Void execute_commands () {
             context->view.time_tracker.heatmap_year = os_get_date().year;
             context->view.time_tracker.descending = true;
             array_init(&context->view.time_tracker.filtered_slots, context->view_mem);
+            map_init(&context->view.time_tracker.heatmap_data, context->view_mem);
         } break;
 
         case CMD_VIEW_SEARCH: {
