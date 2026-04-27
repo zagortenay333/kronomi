@@ -1732,6 +1732,7 @@ UiBox *ui_date_picker_entry (String id, Date *date, String hint, F32 width_in_ch
                     ui_date_picker(str("date_picker"), &d);
                     *date = d;
                 }
+                if (button->signals.clicked) ui_eat_event();
             }
             button->scratch = opened;
         }

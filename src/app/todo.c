@@ -119,9 +119,9 @@ istruct (View) {
             Seconds year;
             Seconds all_time;
             Seconds custom;
-            Array(FilteredTrackerSlot) filtered_slots;
-            I64 heatmap_year;
+            Date heatmap_date;
             Map(String, Seconds) heatmap_data;
+            Array(FilteredTrackerSlot) filtered_slots;
         } time_tracker;
     };
 };
@@ -1377,6 +1377,13 @@ static Void compute_time_tracker_stats () {
     String filter = buf_get_str(view->filter_buf, tm);
     MarkupAst *filter_node = markup_filter_parse(tm, filter);
 
+    Date since = view->since;
+    Date until = view->until;
+
+    if (! os_is_date_ymd_valid(since)) since = (Date){};
+    if (! os_is_date_ymd_valid(until)) until = (Date){9999, 99, 99, 0};
+    if (os_date_cmp(since, until) == 1) swap(since, until);
+
     // Filter slots:
     view->filtered_slots.count = 0;
     array_iter (slot, &context->tracker_slots, *) {
@@ -1385,7 +1392,11 @@ static Void compute_time_tracker_stats () {
         Task dummy = { .text=slot->task_str, .ast=slot->task_ast, .config=&config };
         if (task_passes_filter(&dummy, filter_node)) {
             Seconds total = 0;
-            array_iter (t, &slot->time, *) total = sat_add64(total, t->seconds);
+            array_iter (t, &slot->time, *) {
+                if (os_date_cmp(t->date, since) != -1 && os_date_cmp(t->date, until) != 1) {
+                    total = sat_add64(total, t->seconds);
+                }
+            }
             array_push_lit(&view->filtered_slots, .idx=ARRAY_IDX, .total=total);
         }
     }
@@ -1397,23 +1408,17 @@ static Void compute_time_tracker_stats () {
         array_sort_cmp(&view->filtered_slots, cmp_filtered_slots_ascending);
     }
 
-    { // Compute stats:
+    { // Compute totals and heatmap stats:
         view->today    = 0;
         view->month    = 0;
         view->year     = 0;
         view->all_time = 0;
         view->custom   = 0;
+        map_clear(&view->heatmap_data);
 
         Date today = os_get_date();
         Date start_of_month = { today.year, today.month, 1, 0 };
         Date start_of_year = { today.year, 1, 1, 0 };
-
-        Date since = view->since;
-        Date until = view->until;
-
-        if (! os_is_date_ymd_valid(since)) since = (Date){};
-        if (! os_is_date_ymd_valid(until)) until = (Date){9999, 99, 99, 0};
-        if (os_date_cmp(since, until) == 1) swap(since, until);
 
         array_iter (it, &view->filtered_slots, *) {
             TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
@@ -1425,7 +1430,7 @@ static Void compute_time_tracker_stats () {
                 if (os_date_cmp(t->date, start_of_month) != -1 && tcmp != 1) view->month = sat_add64(view->month, t->seconds);
                 if (os_date_cmp(t->date, start_of_year) != -1 && tcmp != 1) view->year = sat_add64(view->year, t->seconds);
                 if (os_date_cmp(t->date, since) != -1 && os_date_cmp(t->date, until) != 1) view->custom = sat_add64(view->custom, t->seconds);
-                if (t->date.year == view->heatmap_year) {
+                if (t->date.year == view->heatmap_date.year) {
                     String date_str = os_date_to_str(context->view_mem, t->date);
                     Seconds total = 0;
                     map_get(&view->heatmap_data, date_str, &total);
@@ -1456,7 +1461,9 @@ static Void build_heatmap () {
             ui_label(0, "label", str("Day totals"));
             ui_hspacer();
             EventTag etag = ui->event->tag;
-            UiBox *picker = ui_int_picker(str("picker"), &view->heatmap_year, 0, 9999, 4);
+            I64 year = view->heatmap_date.year;
+            UiBox *picker = ui_int_picker(str("picker"), &year, 0, 9999, 4);
+            view->heatmap_date.year = year;
             picker->next_style.size.width.strictness = 1;
             if (ui->event->tag != etag) compute_time_tracker_stats();
         }
@@ -1473,9 +1480,9 @@ static Void build_heatmap () {
                 ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui->config->font_size, 1});
             }
 
-            U32 year = view->heatmap_year;
+            U32 year = view->heatmap_date.year;
             CString day_labels[] = {"Sun", "Mon","Tue","Wed","Thu","Fri","Sat"};
-            CString month_labels[] = {"January","February","March","April","May","June","July","August","September","October","November","December"};
+            CString month_labels[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
             for (U32 month = 1; month < 13; ++month) {
                 U32 week = 0;
@@ -1515,17 +1522,9 @@ static Void build_heatmap () {
 
                                     Date date = {year, month, day, wday};
                                     String date_str = os_date_to_str(tm, date);
+
                                     Seconds total = 0;
                                     map_get(&view->heatmap_data, date_str, &total);
-
-                                    // array_iter (it, &view->filtered_slots, *) {
-                                        // TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
-                                        // array_iter (it, &slot->time, *) {
-                                            // if (os_date_cmp(it->date, date) == 0) {
-                                                // total = sat_add64(total, it->seconds);
-                                            // }
-                                        // }
-                                    // }
 
                                     Vec4 cell_color;
 
@@ -2146,7 +2145,7 @@ static Void execute_commands () {
                 context->view.time_tracker.filter_buf = buf_new(context->view_mem, str("*"));
             }
 
-            context->view.time_tracker.heatmap_year = os_get_date().year;
+            context->view.time_tracker.heatmap_date = os_get_date();
             context->view.time_tracker.descending = true;
             array_init(&context->view.time_tracker.filtered_slots, context->view_mem);
             map_init(&context->view.time_tracker.heatmap_data, context->view_mem);
