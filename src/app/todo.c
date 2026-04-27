@@ -1441,6 +1441,24 @@ static Void compute_time_tracker_stats () {
     }
 }
 
+static Vec4 get_color_for_time (Seconds total) {
+    U32 hours = total / 3600;
+    Vec4 a = ui->theme->bg_color_z2; 
+    Vec4 b = ui->theme->color_green; 
+
+    if (total == 0) {
+        return a;
+    } else if (hours < 2) {
+        return lerp(a, b, .4);
+    } else if (hours < 4) {
+        return lerp(a, b, .7);
+    } else if (hours < 8) {
+        return lerp(a, b, .85);
+    }
+
+    return b;
+}
+
 static Void build_heatmap () {
     tmem_new(tm);
 
@@ -1526,25 +1544,7 @@ static Void build_heatmap () {
                                     Seconds total = 0;
                                     map_get(&view->heatmap_data, date_str, &total);
 
-                                    Vec4 cell_color;
-
-                                    { // Compute cell color:
-                                        U32 hours = total / 3600;
-                                        Vec4 a = ui->theme->bg_color_z2; 
-                                        Vec4 b = ui->theme->color_green; 
-
-                                        if (total == 0) {
-                                            cell_color = a;
-                                        } else if (hours < 2) {
-                                            cell_color = lerp(a, b, .5);
-                                        } else if (hours < 4) {
-                                            cell_color = lerp(a, b, .75);
-                                        } else if (hours < 8) {
-                                            cell_color = lerp(a, b, .9);
-                                        } else {
-                                            cell_color = b;
-                                        }
-                                    }
+                                    Vec4 cell_color = get_color_for_time(total);
 
                                     ui_style_vec4(UI_BG_COLOR, cell_color);
                                     if (os_date_cmp(today, date) == 0) {
@@ -1559,6 +1559,12 @@ static Void build_heatmap () {
                                             String label = astr_fmt(tm, "%s %.*s (Total: %.*s)", day_labels[wday], STR(date_str), STR(time_str));
                                             ui_label(0, "label", label);
                                         }
+                                    }
+
+                                    if (cell->signals.clicked) {
+                                        view->since = date;
+                                        view->until = date;
+                                        compute_time_tracker_stats();
                                     }
                                 }
                             }
@@ -1778,6 +1784,7 @@ static Void build_view_time_tracker () {
                     ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
 
                     ui_box(0, "header") {
+                        ui_style_vec4(UI_BG_COLOR, get_color_for_time(it->total));
                         String time = time_to_str(tm, it->total*1000);
                         String label = astr_fmt(tm, "All time: %.*s", STR(time));
                         ui_label(0, "title", label);
