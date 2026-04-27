@@ -97,6 +97,8 @@ istruct (View) {
             U64 buf_version;
             U64 show_more_idx;
             Buf *buf;
+            Buf *tags_add_buf;
+            Buf *tags_del_buf;
             ArrayU64 searched;
         } search;
 
@@ -125,17 +127,20 @@ istruct (View) {
 
 ienum (CommandTag, U8) {
     CMD_SAVE_CONFIG,
-    CMD_NEW_TASK_FLAGS,
     CMD_ADD_TASKS,
     CMD_DEL_TASK,
+    CMD_NEW_TASK_FLAGS,
     CMD_TOGGLE_TASK_DONE,
-    CMD_NEW_DECK,
-    CMD_DEL_DECK,
-    CMD_ACTIVATE_DECK,
+    CMD_ADD_TAGS,
+    CMD_DELETE_TAGS,
     CMD_START_TRACKING,
     CMD_STOP_TRACKING,
     CMD_NEW_TRACKER_SLOT,
     CMD_UPDATE_TRACKER_SLOT,
+    CMD_SORT_TASKS,
+    CMD_NEW_DECK,
+    CMD_DEL_DECK,
+    CMD_ACTIVATE_DECK,
     CMD_CHANGE_SORT,
     CMD_VIEW_KANBAN,
     CMD_VIEW_EDITOR,
@@ -1000,7 +1005,7 @@ static Void build_view_search () {
             ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
         }
 
-        ui_box(UI_BOX_INVISIBLE_BG, "row_group") {
+        ui_box(UI_BOX_INVISIBLE_BG, "checkboxes") {
             ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
 
             ui_box(0, "delete") {
@@ -1032,6 +1037,26 @@ static Void build_view_search () {
             }
         }
 
+        ui_box(UI_BOX_INVISIBLE_BG, "add_del_tags") {
+            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+
+            ui_box(0, "add_tags") {
+                ui_tag("row");
+                ui_label(0, "title", str("Add tags"));
+                ui_hspacer();
+                UiBox *entry = ui_entry(str("entry"), view->tags_add_buf, 25, str("Tags comma separated..."));
+                entry->next_style.size.width.strictness = 1;
+            }
+
+            ui_box(0, "remove_tags") {
+                ui_tag("row");
+                ui_label(0, "title", str("Delete tags"));
+                ui_hspacer();
+                UiBox *entry = ui_entry(str("entry"), view->tags_del_buf, 25, str("Tags comma separated..."));
+                entry->next_style.size.width.strictness = 1;
+            }
+        }
+
         ui_button_group(str("buttons")) {
             UiBox *close_button = ui_button(str("close")) {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
@@ -1056,9 +1081,16 @@ static Void build_view_search () {
                             if (view->check_searched) flags |= MARKUP_AST_META_CONFIG_HAS_DONE;
                             push_command(.tag=CMD_NEW_TASK_FLAGS, .idx=idx, .flags=flags, .skip_config_save=true);
                         }
+
+                        String str = buf_get_str(view->tags_add_buf, context->view_mem);
+                        if (str.count) array_iter (idx, &view->searched) push_command(.tag=CMD_ADD_TAGS, .idx=idx, .str=str, .skip_config_save=true);
+
+                        str = buf_get_str(view->tags_del_buf, context->view_mem);
+                        if (str.count) array_iter (idx, &view->searched) push_command(.tag=CMD_DELETE_TAGS, .idx=idx, .str=str, .skip_config_save=true);
                     }
 
-                    push_command(.tag=CMD_SAVE_CONFIG);
+                    push_command(.tag=CMD_SORT_TASKS);
+                    push_command(.tag=CMD_SAVE_CONFIG, .save_deck=true);
                 }
             }
         }
@@ -1067,10 +1099,10 @@ static Void build_view_search () {
     ui_scroll_box(str("right_box"), true) {
         ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
         ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_f32(UI_SPACING, ui->theme->spacing);
         ui_style_vec2(UI_PADDING, ui->theme->padding);
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
         if (view->buf_version != buf_get_version(view->buf)) {
             view->searched.count = 0;
@@ -1905,8 +1937,10 @@ static Void execute_commands () {
             task->config->flags = cmd->flags;
             task_serialize(cmd->idx);
             if (is_task_tracked(cmd->idx)) stop_tracking();
-            sort_tasks();
-            if (! cmd->skip_config_save) save_config(true);
+            if (! cmd->skip_config_save) {
+                sort_tasks();
+                save_config(true);
+            }
         } break;
 
         case CMD_TOGGLE_TASK_DONE: {
@@ -1924,6 +1958,56 @@ static Void execute_commands () {
             task_serialize(cmd->idx);
             sort_tasks();
             if (! cmd->skip_config_save) save_config(true);
+        } break;
+
+        case CMD_ADD_TAGS: {
+            ArrayString tags;
+            array_init(&tags, tm);
+            str_split(cmd->str, str(", "), false, false, &tags);
+
+            array_iter (tag, &tags) {
+                MarkupAst *n = markup_filter_parse(tm, tag);
+                if (n->tag != MARKUP_AST_FILTER_TAG) array_remove(&tags, ARRAY_IDX--);
+            }
+
+            if (tags.count) {
+                Task *task = array_ref(&context->tasks, cmd->idx);
+
+                if (! (task->config->flags & MARKUP_AST_META_CONFIG_HAS_TAGS)) {
+                    task->config->flags |= MARKUP_AST_META_CONFIG_HAS_TAGS;
+                    map_init(&task->config->tags, context->config_mem);
+                }
+
+                array_iter (tag, &tags) map_add(&task->config->tags, tag, 0);
+                task_serialize(cmd->idx);
+
+                if (is_task_tracked(cmd->idx)) stop_tracking();
+                if (! cmd->skip_config_save) {
+                    sort_tasks();
+                    save_active_deck();
+                }
+            }
+        } break;
+
+        case CMD_DELETE_TAGS: {
+            ArrayString tags;
+            array_init(&tags, tm);
+            str_split(cmd->str, str(", "), false, false, &tags);
+
+            if (tags.count) {
+                Task *task = array_ref(&context->tasks, cmd->idx);
+
+                if (! (task->config->flags & MARKUP_AST_META_CONFIG_HAS_TAGS)) continue;
+
+                array_iter (tag, &tags) map_remove(&task->config->tags, tag);
+                task_serialize(cmd->idx);
+
+                if (is_task_tracked(cmd->idx)) stop_tracking();
+                if (! cmd->skip_config_save) {
+                    sort_tasks();
+                    save_active_deck();
+                }
+            }
         } break;
 
         case CMD_NEW_DECK: {
@@ -1966,6 +2050,10 @@ static Void execute_commands () {
             slot->task_ast = task->ast;
             context->config_mem_fragmentation++;
             save_time_tracker_data();
+        } break;
+
+        case CMD_SORT_TASKS: {
+            sort_tasks();
         } break;
 
         case CMD_CHANGE_SORT: {
@@ -2057,6 +2145,8 @@ static Void execute_commands () {
             destroy_current_view();
             context->view.tag = VIEW_SEARCH;
             context->view.search.buf = buf_new(context->view_mem, needle);
+            context->view.search.tags_add_buf = buf_new(context->view_mem, str(""));
+            context->view.search.tags_del_buf = buf_new(context->view_mem, str(""));
             array_init(&context->view.search.searched, context->view_mem);
         } break;
 

@@ -1051,6 +1051,10 @@ Void ui_frame (Void(*app_build)(), F64 dt) {
         map_iter (slot, &ui->box_cache) {
             Auto box = slot->val;
             if (box->gc_flag != ui->gc_flag) {
+                if (box == ui->focused) {
+                    ui->focused = 0;
+                    ui->focus_idx = 0;
+                }
                 array_push(&ui->free_boxes, box);
                 ui_free_box_data(box->key);
                 map_iter_remove(slot, &ui->box_cache);
