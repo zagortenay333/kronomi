@@ -1792,7 +1792,6 @@ static Void build_view_time_tracker () {
                     }
 
                     ui_box(0, "body") {
-                        ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z1);
                         ui_text_view(0, str("text"), slot->task_str, ui->config->font_size, (SliceUiMarkupRange){});
                     }
                 }
