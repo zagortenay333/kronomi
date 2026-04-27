@@ -229,6 +229,54 @@ static Void draw (UiBox *box) {
     box->rect.h = current_y_offset;
 }
 
+static Void compute_glyphs (UiTextView *info, SliceUiMarkupRange markup_ranges) {
+    Font *font_normal       = font_get(ui->font_cache, ui->config->font_path_normal, info->font_size);
+    Font *font_bold         = font_get(ui->font_cache, ui->config->font_path_bold, info->font_size);
+    Font *font_italic       = font_get(ui->font_cache, ui->config->font_path_italic, info->font_size);
+    Font *font_mono         = font_get(ui->font_cache, ui->config->font_path_mono, info->font_size);
+    Font *font_normal_small = font_get(ui->font_cache, ui->config->font_path_normal, info->font_size * .7);
+    Font *font_bold_small   = font_get(ui->font_cache, ui->config->font_path_bold, info->font_size * .7);
+    Font *font_italic_small = font_get(ui->font_cache, ui->config->font_path_italic, info->font_size * .7);
+    Font *font_mono_small   = font_get(ui->font_cache, ui->config->font_path_mono, info->font_size * .7);
+
+    ui_markup_flatten_ranges(info->text, markup_ranges, &info->markup);
+
+    U64 offset = 0;
+    array_iter (range, &info->markup, *) {
+        Font *font = (range->markup.flags & UI_MARKUP_BOLD) ? font_bold :
+                     (range->markup.flags & UI_MARKUP_ITALIC) ? font_italic :
+                     (range->markup.flags & UI_MARKUP_MONO) ? font_mono :
+                     font_normal;
+
+        if (range->markup.flags & (UI_MARKUP_SUPERSCRIPT | UI_MARKUP_SUBSCRIPT)) {
+            if (font == font_normal) {
+                font = font_normal_small;
+            } else if (font == font_bold) {
+                font = font_bold_small;
+            } else if (font == font_mono) {
+                font = font_mono_small;
+            } else {
+                font = font_italic_small;
+            }
+        }
+
+        String slice = str_slice(info->text, range->start, range->end - range->start + 1);
+        SliceGlyphInfo glyphs = font_get_glyph_infos(font, info->header.mem, slice);
+
+        array_iter (glyph, &glyphs, *) {
+            glyph->x += offset;
+            glyph->byte_offset += range->start;
+            array_push_lit(&info->styled_glyphs, .glyph=glyph, .markup=&range->markup);
+        }
+
+        if (glyphs.count > 0) {
+            GlyphInfo *last_glyph = array_ref(&glyphs, glyphs.count - 1);
+            AtlasSlot *last_slot = font_get_atlas_slot(font, last_glyph);
+            offset = last_glyph->x + last_slot->advance;
+        }
+    }
+}
+
 UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, SliceUiMarkupRange markup_ranges) {
     UiBox *container = ui_box_str(flags, id) {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
@@ -240,56 +288,16 @@ UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, Sl
         UiTextView *info = ui_get_box_data(container, sizeof(UiTextView), 1*KB);
 
         if (! info->text.data) {
-            Font *font_normal       = font_get(ui->font_cache, ui->config->font_path_normal, font_size);
-            Font *font_bold         = font_get(ui->font_cache, ui->config->font_path_bold, font_size);
-            Font *font_italic       = font_get(ui->font_cache, ui->config->font_path_italic, font_size);
-            Font *font_mono         = font_get(ui->font_cache, ui->config->font_path_mono, font_size);
-            Font *font_normal_small = font_get(ui->font_cache, ui->config->font_path_normal, font_size * .7);
-            Font *font_bold_small   = font_get(ui->font_cache, ui->config->font_path_bold, font_size * .7);
-            Font *font_italic_small = font_get(ui->font_cache, ui->config->font_path_italic, font_size * .7);
-            Font *font_mono_small   = font_get(ui->font_cache, ui->config->font_path_mono, font_size * .7);
-
             info->font_size = font_size;
             info->text = str_copy(info->header.mem, text);
             array_init(&info->markup, info->header.mem);
             array_init(&info->styled_glyphs, info->header.mem);
-
-            ui_markup_flatten_ranges(text, markup_ranges, &info->markup);
-
-            U64 offset = 0;
-            array_iter (range, &info->markup, *) {
-                Font *font = (range->markup.flags & UI_MARKUP_BOLD) ? font_bold :
-                             (range->markup.flags & UI_MARKUP_ITALIC) ? font_italic :
-                             (range->markup.flags & UI_MARKUP_MONO) ? font_mono :
-                             font_normal;
-
-                if (range->markup.flags & (UI_MARKUP_SUPERSCRIPT | UI_MARKUP_SUBSCRIPT)) {
-                    if (font == font_normal) {
-                        font = font_normal_small;
-                    } else if (font == font_bold) {
-                        font = font_bold_small;
-                    } else if (font == font_mono) {
-                        font = font_mono_small;
-                    } else {
-                        font = font_italic_small;
-                    }
-                }
-
-                String slice = str_slice(text, range->start, range->end - range->start + 1);
-                SliceGlyphInfo glyphs = font_get_glyph_infos(font, info->header.mem, slice);
-
-                array_iter (glyph, &glyphs, *) {
-                    glyph->x += offset;
-                    glyph->byte_offset += range->start;
-                    array_push_lit(&info->styled_glyphs, .glyph=glyph, .markup=&range->markup);
-                }
-
-                if (glyphs.count > 0) {
-                    GlyphInfo *last_glyph = array_ref(&glyphs, glyphs.count - 1);
-                    AtlasSlot *last_slot = font_get_atlas_slot(font, last_glyph);
-                    offset = last_glyph->x + last_slot->advance;
-                }
-            }
+            compute_glyphs(info, markup_ranges);
+        } else if (! str_match(text, info->text)) {
+            info->text = str_copy(info->header.mem, text);
+            info->markup.count = 0;
+            info->styled_glyphs.count = 0;
+            compute_glyphs(info, markup_ranges);
         }
     }
 

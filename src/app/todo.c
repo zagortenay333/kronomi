@@ -1785,8 +1785,7 @@ static Void build_view_time_tracker () {
 
                     ui_box(0, "header") {
                         ui_style_vec4(UI_BG_COLOR, get_color_for_time(it->total));
-                        String time = time_to_str(tm, it->total*1000);
-                        ui_label(0, "title", time);
+                        ui_label(0, "title", time_to_str(tm, it->total*1000));
                         ui_hspacer();
                     }
 
