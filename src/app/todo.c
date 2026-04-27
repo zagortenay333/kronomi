@@ -1455,8 +1455,10 @@ static Void build_heatmap () {
         ui_box(0, "header") {
             ui_label(0, "label", str("Day totals"));
             ui_hspacer();
+            EventTag etag = ui->event->tag;
             UiBox *picker = ui_int_picker(str("picker"), &view->heatmap_year, 0, 9999, 4);
             picker->next_style.size.width.strictness = 1;
+            if (ui->event->tag != etag) compute_time_tracker_stats();
         }
 
         ui_scroll_box(str("inner"), true) {
