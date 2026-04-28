@@ -697,6 +697,18 @@ static Void build_task (U64 idx, Bool *out_deleted) {
         ui_tag("card");
         ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
 
+        if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_HIDE) {
+            ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
+        }
+
+        if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_DUE) {
+            Date today = os_get_date();
+            Date due = os_str_to_date(task->config->due);
+            if (os_date_cmp(due, today) == -1) {
+                ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
+            }
+        }
+
         ui_box(0, "header") {
             if (is_task_tracked(idx)) {
                 ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
@@ -1443,8 +1455,8 @@ static Void compute_time_tracker_stats () {
 
 static Vec4 get_color_for_time (Seconds total) {
     U32 hours = total / 3600;
-    Vec4 a = ui->theme->bg_color_z2; 
-    Vec4 b = ui->theme->color_green; 
+    Vec4 a = ui->theme->bg_color_z2;
+    Vec4 b = ui->theme->color_green;
 
     if (total == 0) {
         return a;
