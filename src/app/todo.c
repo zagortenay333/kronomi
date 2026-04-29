@@ -1748,6 +1748,7 @@ static Void build_view_time_tracker () {
                     astr_push_fmt(&astr, "        \"total\": %lu,\n", view->custom);
                     astr_push_cstr(&astr, "        \"slots\": [\n");
                     array_iter (it, &view->filtered_slots, *) {
+                        if (it->total == 0) continue;
                         TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
                         String text = str_escape(tm, slot->task_str);
                         astr_push_fmt(&astr, "            { \"total\": %lu, \"str\": %.*s  },\n",  it->total, STR(text));
@@ -1815,6 +1816,8 @@ static Void build_view_time_tracker () {
             // Build per slot infos:
             array_iter (it, &view->filtered_slots, *) {
                 if (ARRAY_IDX == view->show_more_idx) break;
+                if (it->total == 0) continue;
+
                 TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
 
                 ui_box_fmt(0, "slot%lu", ARRAY_IDX) {
