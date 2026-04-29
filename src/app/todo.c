@@ -725,7 +725,7 @@ static Void build_task (U64 idx, Bool *out_deleted) {
         if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_DUE) {
             Date today = os_get_date();
             Date due = os_str_to_date(task->config->due);
-            if (os_date_cmp(due, today) == -1) {
+            if (os_date_cmp(due, today) == -1 && !(task->config->flags & MARKUP_AST_META_CONFIG_HAS_DONE)) {
                 ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
             }
         }
