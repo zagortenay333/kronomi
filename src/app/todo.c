@@ -287,7 +287,7 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
         badpath;
     }
     case MARKUP_AST_FILTER_CREATED: {
-        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_DUE)) return false;
+        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_CREATED)) return false;
         String filter_date_str = cast(MarkupAstFilterCreated*, filter)->date;
         if (! filter_date_str.data) return true;
         Date filter_date = os_str_to_date(filter_date_str);
@@ -300,7 +300,7 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
         badpath;
     }
     case MARKUP_AST_FILTER_COMPLETED: {
-        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_DUE)) return false;
+        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_COMPLETED)) return false;
         String filter_date_str = cast(MarkupAstFilterCompleted*, filter)->date;
         if (! filter_date_str.data) return true;
         Date filter_date = os_str_to_date(filter_date_str);
