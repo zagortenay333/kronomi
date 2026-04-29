@@ -1853,6 +1853,7 @@ static Void build_view_time_tracker () {
 }
 
 static Void build_view_kanban () {
+    tmem_new(tm);
     Auto view = &context->view.kanban;
 
     ui_box(0, "navbox") {
@@ -1893,6 +1894,17 @@ static Void build_view_kanban () {
             if (context->tracked_task_idx != ARRAY_NIL_IDX) ui_style_box_vec4(icon, UI_TEXT_COLOR, ui->theme->text_color_red);
             if (tracker_button->signals.clicked) push_command(.tag=CMD_VIEW_TIME_TRACKER, .idx=ARRAY_NIL_IDX);
             if (tracker_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Time tracker")); }
+        }
+
+        UiBox *file_button = ui_button(str("file")) {
+            UiBox *icon = ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FILE);
+            if (context->tracked_task_idx != ARRAY_NIL_IDX) ui_style_box_vec4(icon, UI_TEXT_COLOR, ui->theme->text_color_red);
+            String todo_filepath = {};
+            Deck *deck = get_active_deck();
+            if (deck) todo_filepath = buf_get_str(deck->path, tm);
+            Bool have_file = fs_is_file(todo_filepath);
+            if (file_button->signals.clicked && have_file) win_open_file_url(todo_filepath);
+            if (file_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Open todo file")); }
         }
     }
 
@@ -2092,7 +2104,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_ACTIVATE_DECK: {
-            array_iter (deck, &context->decks, *) deck->active == (ARRAY_IDX == cmd->idx);
+            array_iter (deck, &context->decks, *) deck->active = (ARRAY_IDX == cmd->idx);
             load_active_deck();
             if (! cmd->skip_config_save) save_config(false);
         } break;
