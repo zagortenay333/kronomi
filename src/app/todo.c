@@ -1334,7 +1334,10 @@ static Void build_view_deck_browser () {
                 }
             }
 
-            ui_button_info_popup(str("help_button"), true, str("data/docs/todo.txt"), true);
+            String todo = fs_read_entire_file(tm, str("data/docs/todo.txt"), 0);
+            String filters = fs_read_entire_file(tm, str("data/docs/filters.txt"), 0);
+            String info = astr_fmt(tm, "%.*s\n%.*s", STR(todo), STR(filters));
+            ui_button_info_popup(str("help_button"), true, info, false);
         }
     }
 

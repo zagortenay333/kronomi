@@ -1,6 +1,6 @@
-# Todo applet 
+# Todo deck 
 
-The todo applet stores all data in a single text file.
+A todo deck is a single text file.
 
 The format of this file is the markup language described in the help
 applet, and each todo note is a top-level meta block. For example:
