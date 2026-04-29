@@ -77,7 +77,7 @@ Parser *parser_new (Mem *mem, String text) {
 }
 
 MarkupAst *markup_ast_alloc (Mem *mem, MarkupAstTag tag) {
-    MarkupAst *node = mem_alloc(mem, MarkupAst, .size=markup_ast_get_node_size[tag], .align=markup_ast_get_node_align[tag]);
+    MarkupAst *node = mem_alloc(mem, MarkupAst, .zeroed=true, .size=markup_ast_get_node_size[tag], .align=markup_ast_get_node_align[tag]);
     node->tag = tag;
     array_init(&node->children, mem);
     return node;
@@ -752,6 +752,12 @@ static MarkupAst *parse_filter_due (Parser *p) {
     MarkupAst *node = make_node(p, MARKUP_AST_FILTER_DUE);
     lex_eat(p->lex);
     lex_try_eat(p->lex, TOKEN_SPACES);
+    if (lex_try_eat(p->lex, '<')) {
+        cast(MarkupAstFilterDue*, node)->cmp = MARKUP_CMP_LESS;
+    } else if (lex_try_eat(p->lex, '>')) {
+        cast(MarkupAstFilterDue*, node)->cmp = MARKUP_CMP_GREATER;
+    }
+    lex_try_eat(p->lex, TOKEN_SPACES);
     cast(MarkupAstFilterDue*, node)->date = try_parse_date(p);
     return complete_node(p, node);
 }
@@ -760,6 +766,12 @@ static MarkupAst *parse_filter_created (Parser *p) {
     MarkupAst *node = make_node(p, MARKUP_AST_FILTER_CREATED);
     lex_eat(p->lex);
     lex_try_eat(p->lex, TOKEN_SPACES);
+    if (lex_try_eat(p->lex, '<')) {
+        cast(MarkupAstFilterCreated*, node)->cmp = MARKUP_CMP_LESS;
+    } else if (lex_try_eat(p->lex, '>')) {
+        cast(MarkupAstFilterCreated*, node)->cmp = MARKUP_CMP_GREATER;
+    }
+    lex_try_eat(p->lex, TOKEN_SPACES);
     cast(MarkupAstFilterCreated*, node)->date = try_parse_date(p);
     return complete_node(p, node);
 }
@@ -767,6 +779,12 @@ static MarkupAst *parse_filter_created (Parser *p) {
 static MarkupAst *parse_filter_completed (Parser *p) {
     MarkupAst *node = make_node(p, MARKUP_AST_FILTER_COMPLETED);
     lex_eat(p->lex);
+    lex_try_eat(p->lex, TOKEN_SPACES);
+    if (lex_try_eat(p->lex, '<')) {
+        cast(MarkupAstFilterCompleted*, node)->cmp = MARKUP_CMP_LESS;
+    } else if (lex_try_eat(p->lex, '>')) {
+        cast(MarkupAstFilterCompleted*, node)->cmp = MARKUP_CMP_GREATER;
+    }
     lex_try_eat(p->lex, TOKEN_SPACES);
     cast(MarkupAstFilterCompleted*, node)->date = try_parse_date(p);
     return complete_node(p, node);

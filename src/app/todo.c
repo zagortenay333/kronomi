@@ -275,21 +275,42 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
     case MARKUP_AST_FILTER_PRIORITY: return (c->flags & MARKUP_AST_META_CONFIG_HAS_PRIORITY) && (cast(MarkupAstFilterPriority*, filter)->priority == c->priority);
     case MARKUP_AST_FILTER_DUE: {
         if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_DUE)) return false;
-        String date = cast(MarkupAstFilterDue*, filter)->date;
-        if (! date.data) return true;
-        return str_match(date, c->due);
+        String filter_date_str = cast(MarkupAstFilterDue*, filter)->date;
+        if (! filter_date_str.data) return true;
+        Date filter_date = os_str_to_date(filter_date_str);
+        Date task_date = os_str_to_date(c->due);
+        switch (cast(MarkupAstFilterDue*, filter)->cmp) {
+        case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
+        case MARKUP_CMP_LESS:    return os_date_cmp(task_date, filter_date) == -1;
+        case MARKUP_CMP_GREATER: return os_date_cmp(task_date, filter_date) == 1;
+        }
+        badpath;
     }
     case MARKUP_AST_FILTER_CREATED: {
-        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_CREATED)) return false;
-        String date = cast(MarkupAstFilterCreated*, filter)->date;
-        if (! date.data) return true;
-        return str_match(date, c->created);
+        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_DUE)) return false;
+        String filter_date_str = cast(MarkupAstFilterCreated*, filter)->date;
+        if (! filter_date_str.data) return true;
+        Date filter_date = os_str_to_date(filter_date_str);
+        Date task_date = os_str_to_date(c->due);
+        switch (cast(MarkupAstFilterCreated*, filter)->cmp) {
+        case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
+        case MARKUP_CMP_LESS:    return os_date_cmp(task_date, filter_date) == -1;
+        case MARKUP_CMP_GREATER: return os_date_cmp(task_date, filter_date) == 1;
+        }
+        badpath;
     }
     case MARKUP_AST_FILTER_COMPLETED: {
-        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_COMPLETED)) return false;
-        String date = cast(MarkupAstFilterCompleted*, filter)->date;
-        if (! date.data) return true;
-        return str_match(date, c->completed);
+        if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_DUE)) return false;
+        String filter_date_str = cast(MarkupAstFilterCompleted*, filter)->date;
+        if (! filter_date_str.data) return true;
+        Date filter_date = os_str_to_date(filter_date_str);
+        Date task_date = os_str_to_date(c->due);
+        switch (cast(MarkupAstFilterCompleted*, filter)->cmp) {
+        case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
+        case MARKUP_CMP_LESS:    return os_date_cmp(task_date, filter_date) == -1;
+        case MARKUP_CMP_GREATER: return os_date_cmp(task_date, filter_date) == 1;
+        }
+        badpath;
     }
     default: badpath;
     }

@@ -102,6 +102,12 @@ istruct (MarkupAstMetaConfig) {
     Set(String) body_tags; // Tags that appear in the body.
 };
 
+ienum (MarkupCmp, U8) {
+    MARKUP_CMP_EQUAL,
+    MARKUP_CMP_LESS,
+    MARKUP_CMP_GREATER,
+};
+
 ienum (MarkupAstTag, U8) {
     #define X(TAG, TYPE, ...) TAG, e##TYPE=TAG,
         EACH_MARKUP_AST_NODE(X)
@@ -145,9 +151,9 @@ istruct (MarkupAstFilterNot)       { MarkupAst base; };
 istruct (MarkupAstFilterOr)        { MarkupAst base; };
 istruct (MarkupAstFilterAnd)       { MarkupAst base; };
 istruct (MarkupAstFilterAny)       { MarkupAst base; };
-istruct (MarkupAstFilterDue)       { MarkupAst base; String date; };
-istruct (MarkupAstFilterCreated)   { MarkupAst base; String date; };
-istruct (MarkupAstFilterCompleted) { MarkupAst base; String date; };
+istruct (MarkupAstFilterDue)       { MarkupAst base; MarkupCmp cmp; String date; };
+istruct (MarkupAstFilterCreated)   { MarkupAst base; MarkupCmp cmp; String date; };
+istruct (MarkupAstFilterCompleted) { MarkupAst base; MarkupCmp cmp; String date; };
 istruct (MarkupAstFilterDone)      { MarkupAst base; };
 istruct (MarkupAstFilterPin)       { MarkupAst base; };
 istruct (MarkupAstFilterHide)      { MarkupAst base; };
