@@ -1942,7 +1942,15 @@ static Void build_view_kanban () {
                                         ui_tag("button");
                                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
                                         search_button->next_style.size.width.strictness = 1;
-                                        if (search_button->signals.clicked) push_command(.tag=CMD_VIEW_SEARCH, .str=column->filter_text);
+                                        if (search_button->signals.clicked) {
+                                            AString filter = astr_new(context->view_mem);
+                                            array_iter (c, &view->columns) {
+                                                if (c == column) break;
+                                                astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                                            }
+                                            astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
+                                            push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
+                                        }
                                     }
                                 }
                             }
