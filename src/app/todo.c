@@ -1322,7 +1322,10 @@ static Void build_view_deck_browser () {
                     ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                     ui_label(UI_BOX_CLICK_THROUGH, "label", str("Close"));
                     if (close_button->signals.clicked) {
+                        U64 active_deck_idx = 0;
+                        array_iter (deck, &context->decks, *) if (deck->active) active_deck_idx = ARRAY_IDX;
                         push_command(.tag=CMD_SAVE_CONFIG);
+                        push_command(.tag=CMD_ACTIVATE_DECK, .idx=active_deck_idx);
                         push_command(.tag=CMD_VIEW_KANBAN);
                     }
                 }
