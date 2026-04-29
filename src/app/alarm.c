@@ -313,7 +313,7 @@ static Void build_view_editor () {
 
             UiBox *header = ui_box(0, "header") {
                 ui_style_vec2(UI_PADDING, ui->theme->padding);
-                ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
+                ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
                 ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color);
                 ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width);
                 ui_style_vec4(UI_RADIUS, vec4(r, r, 0, 0));
