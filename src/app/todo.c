@@ -1633,11 +1633,22 @@ static Void build_view_time_tracker () {
 
                 ui_file_picker_entry(str("tracker_file"), context->time_tracker_file, str("Time tracker file..."), -1, false, false, (String){});
 
-                UiBox *info_button = ui_button_info_popup(str("info_button"), true, str("data/docs/tracker.txt"), true);
-                info_button->next_style.size.width.strictness = 1;
-
                 String filepath = buf_get_str(context->time_tracker_file, tm);
                 Bool is_file = fs_is_file(filepath);
+
+                UiBox *button_group = ui_button_group(str("linked")) {
+                    button_group->next_style.size.width.strictness = 1;
+
+                    UiBox *edit_button = ui_button(str("edit")) {
+                        edit_button->next_style.size.width.strictness = 1;
+                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
+                        if (edit_button->signals.clicked) win_open_file_url(filepath);
+                    }
+
+                    UiBox *info_button = ui_button_info_popup(str("info_button"), true, str("data/docs/tracker.txt"), true);
+                    info_button->next_style.size.width.strictness = 1;
+                }
+
 
                 if (! is_file) {
                     ui_style_rule("#entry #text_box") ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_red);
