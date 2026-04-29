@@ -502,7 +502,8 @@ UiBox *ui_ted (String label, Buf *buf, Bool single_line_mode, UiTextEditorWrapMo
         }
 
         U64 v = buf_get_version(info->buf);
-        if (v != info->buf_version) {
+        U64 l = buf_get_count(info->buf);
+        if (info->prev_buf_len != l || info->buf_version != v) {
             info->dirty = true;
             info->buf_version = v;
         }

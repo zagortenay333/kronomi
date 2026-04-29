@@ -32,6 +32,7 @@ istruct (UiTextEditorInfo) {
     UiBoxData header;
     Buf *buf;
     U64 buf_version;
+    U64 prev_buf_len;
     UiTextEditorCursor cursor;
     Vec2 cursor_coord;
     Vec2 scroll_coord;

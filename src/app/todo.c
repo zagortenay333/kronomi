@@ -291,7 +291,7 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
         String filter_date_str = cast(MarkupAstFilterCreated*, filter)->date;
         if (! filter_date_str.data) return true;
         Date filter_date = os_str_to_date(filter_date_str);
-        Date task_date = os_str_to_date(c->due);
+        Date task_date = os_str_to_date(c->created);
         switch (cast(MarkupAstFilterCreated*, filter)->cmp) {
         case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
         case MARKUP_CMP_LESS:    return os_date_cmp(task_date, filter_date) == -1;
@@ -304,7 +304,7 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
         String filter_date_str = cast(MarkupAstFilterCompleted*, filter)->date;
         if (! filter_date_str.data) return true;
         Date filter_date = os_str_to_date(filter_date_str);
-        Date task_date = os_str_to_date(c->due);
+        Date task_date = os_str_to_date(c->completed);
         switch (cast(MarkupAstFilterCompleted*, filter)->cmp) {
         case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
         case MARKUP_CMP_LESS:    return os_date_cmp(task_date, filter_date) == -1;
@@ -861,7 +861,9 @@ static Void build_task (U64 idx, Bool *out_deleted) {
                         String label = astr_fmt(tm, "%s: %.*s", "Created", STR(task->config->created));
                         UiBox *labelb = ui_label(UI_BOX_CLICK_THROUGH, "label", label);
                         ui_style_box_vec4(labelb, UI_TEXT_COLOR, ui->theme->text_color_green);
-                        if (created_button->signals.clicked) push_command(.tag=CMD_VIEW_SEARCH, .str=astr_fmt(context->view_mem, "created %.*s", STR(task->config->created)));
+                        if (created_button->signals.clicked) {
+                            push_command(.tag=CMD_VIEW_SEARCH, .str=astr_fmt(context->view_mem, "created %.*s", STR(task->config->created)));
+                        }
                     }
                 }
 
