@@ -326,6 +326,15 @@ static Void size_table_cell (UiBox *cell, U64 axis) {
 
 static Void build_block (MarkupView *info, MarkupAst *node) {
     tmem_new(tm);
+
+    if (info->custom_builder) {
+        UiBox *box = info->custom_builder(info, node);
+        if (box) {
+            if (info->build_ast_to_box) map_add(&info->ast_to_box, node, box);
+            return;
+        }
+    }
+
     U64 n = array_get_last(&ui->box_stack)->children.count;
     UiBox *box = 0;
 
@@ -476,7 +485,7 @@ static Void free_markup_view (Void *info_) {
     arena_destroy(cast(Arena*, info->ast_mem));
 }
 
-UiBox *ui_markup_view_buf (String id, Buf *buf, Bool build_ast_to_box, String *out_clicked_tag) {
+UiBox *ui_markup_view_buf (String id, Buf *buf, Bool build_ast_to_box, String *out_clicked_tag, MarkupBuilder builder) {
     UiBox *container = ui_scroll_box(id, true) {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_CHILDREN_SUM, 1, 1});
@@ -515,8 +524,9 @@ UiBox *ui_markup_view_buf (String id, Buf *buf, Bool build_ast_to_box, String *o
         }
 
         info->out_clicked_tag = out_clicked_tag;
+        info->custom_builder = builder;
 
-        ui_box(0, "content") {
+        info->root = ui_box(0, "content") {
             ui_tag("block");
             ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
             array_iter (child, &info->ast->children) build_block(info, child);
@@ -541,7 +551,7 @@ UiBox *ui_markup_view (String id, String text, String *out_clicked_tag) {
         } else {
             info->buf = buf_new(info->header.mem, text);
         }
-        ui_markup_view_buf(str("markup"), info->buf, false, out_clicked_tag);
+        ui_markup_view_buf(str("markup"), info->buf, false, out_clicked_tag, 0);
     }
 
     return container;

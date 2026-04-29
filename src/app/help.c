@@ -37,7 +37,7 @@ Void help_view_build (UiViewInstance *, Bool visible) {
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
             ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
-            UiBox *markup = ui_markup_view_buf(str("markup"), context->buf, true, 0);
+            UiBox *markup = ui_markup_view_buf(str("markup"), context->buf, true, 0, 0);
             ui_style_box_size(markup, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 40*ui->config->font_size, 1});
             info = ui_get_box_data(markup, 0, 0);
         }

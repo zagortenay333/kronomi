@@ -709,7 +709,7 @@ static void build_tracker_popup (U64 idx) {
     }
 }
 
-static Void build_task (U64 idx, Bool *out_deleted) {
+static UiBox *build_task (U64 idx, Bool *out_deleted) {
     tmem_new(tm);
 
     Task *task = array_ref(&context->tasks, idx);
@@ -923,6 +923,40 @@ static Void build_task (U64 idx, Bool *out_deleted) {
             if (clicked_tag.data) push_command(.tag=CMD_VIEW_SEARCH, .str=clicked_tag);
         }
     }
+
+    return box;
+}
+
+static UiBox *preview_builder (MarkupView *info, MarkupAst *node) {
+    UiBox *parent = array_get_last(&ui->box_stack);
+    if (parent != info->root) return 0; // Not top level markup node.
+
+    if (is_valid_task(node)) {
+        add_task(info->text, node);
+        EventTag etag = ui->event->tag;
+        ui->event->tag = EVENT_DUMMY; 
+        UiBox *box = build_task(context->tasks.count - 1, 0);
+        ui->event->tag = etag;
+        return box;
+    } else {
+        UiBox *container = ui_box_fmt(0, "non_task%lu", parent->children.count) {
+            ui_tag("card");
+            ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
+
+            ui_box(0, "header") {
+                ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
+                ui_label(0, "label", str("Non task. Valid tasks must start with square brackets."));
+                ui_hspacer();
+            }
+
+            ui_box(0, "body") {
+                String text = markup_ast_get_text(node, info->text);
+                ui_markup_view(str("markup"), text, 0);
+            }
+        }
+
+        return container;
+    }
 }
 
 static Void build_view_editor () {
@@ -994,30 +1028,13 @@ static Void build_view_editor () {
         ui_style_f32(UI_SPACING, ui->theme->spacing);
         ui_style_vec2(UI_PADDING, ui->theme->padding);
 
-        F32 r = ui->theme->radius.x;
-        F32 b = ui->theme->border_width.x;
-
-        ui_box(UI_BOX_INVISIBLE_BG, "preview") {
+        ui_box(UI_BOX_INVISIBLE_BG, "previews") {
             ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 30*ui->config->font_size, 1});
+            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 1});
 
-            ui_box(0, "header") {
-                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 1});
-                ui_style_vec2(UI_PADDING, ui->theme->padding);
-                ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
-                ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color);
-                ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width);
-                ui_style_vec4(UI_RADIUS, vec4(r, r, 0, 0));
-                ui_label(0, "title", str("Task previews"));
-            }
-
-            preview = ui_markup_view_buf(str("markup"), view->buf, true, 0);
-            ui_style_box_vec2(preview, UI_PADDING, ui->theme->padding);
-            ui_style_box_vec4(preview, UI_BG_COLOR, ui->theme->bg_color_z3);
-            ui_style_box_vec4(preview, UI_BORDER_COLOR, ui->theme->border_color);
-            ui_style_box_vec4(preview, UI_BORDER_WIDTHS, ui->theme->border_width);
-            ui_style_box_vec4(preview, UI_RADIUS, vec4(0, 0, r, r));
-            ui_style_box_vec4(preview, UI_BORDER_WIDTHS, vec4(b, 0, b, b));
+            U64 count = context->tasks.count;
+            preview = ui_markup_view_buf(str("markup"), view->buf, true, 0, preview_builder);
+            context->tasks.count = count;
         }
     }
 

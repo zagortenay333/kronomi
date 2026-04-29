@@ -775,7 +775,7 @@ static Void build_view_card_editor () {
                 ui_label(0, "title", str("Question"));
             }
 
-            question_markup = ui_markup_view_buf(str("markup"), view->question_buf, true, 0);
+            question_markup = ui_markup_view_buf(str("markup"), view->question_buf, true, 0, 0);
             ui_style_box_vec2(question_markup, UI_PADDING, ui->theme->padding);
             ui_style_box_vec4(question_markup, UI_BG_COLOR, ui->theme->bg_color_z3);
             ui_style_box_vec4(question_markup, UI_BORDER_COLOR, ui->theme->border_color);
@@ -798,7 +798,7 @@ static Void build_view_card_editor () {
                 ui_label(0, "title", str("Answer"));
             }
 
-            answer_markup = ui_markup_view_buf(str("markup"), view->answer_buf, true, 0);
+            answer_markup = ui_markup_view_buf(str("markup"), view->answer_buf, true, 0, 0);
             ui_style_box_vec2(answer_markup, UI_PADDING, ui->theme->padding);
             ui_style_box_vec4(answer_markup, UI_BG_COLOR, ui->theme->bg_color_z3);
             ui_style_box_vec4(answer_markup, UI_BORDER_COLOR, ui->theme->border_color);

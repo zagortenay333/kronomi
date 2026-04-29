@@ -133,7 +133,7 @@ UiBox *ui_button_info_popup (String id, Bool sideways, String markup_filepath, B
         Bool opened = button->scratch;
         if (opened || button->signals.clicked) {
             ui_tag_box(button, "press");
-            ui_popup(str("popup"), &opened, sideways, button) ui_markup_view_buf(str("info"), info->buf, false, 0);
+            ui_popup(str("popup"), &opened, sideways, button) ui_markup_view_buf(str("info"), info->buf, false, 0, 0);
         }
         button->scratch = opened;
     }

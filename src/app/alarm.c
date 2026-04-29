@@ -1,3 +1,10 @@
+// - improve task editor previews
+// - add ability to reverse the order in which tasks go into columns
+// - what happens when a deck path is not a file?
+// - select deck immediately when the checkbox is pressed?
+// - word based editor wrapping
+// - when serializing the todo file the body of a task should go on diff line from header
+
 #include "app/app.h"
 #include "ui/ui_widgets.h"
 #include "ui/ui_markup_view.h"
@@ -408,7 +415,7 @@ static Void build_view_editor () {
                 ui_label(0, "title", str("Message preview"));
             }
 
-            preview = ui_markup_view_buf(str("markup"), view->buf, true, 0);
+            preview = ui_markup_view_buf(str("markup"), view->buf, true, 0, 0);
             ui_style_box_vec2(preview, UI_PADDING, ui->theme->padding);
             ui_style_box_vec4(preview, UI_BG_COLOR, ui->theme->bg_color_z3);
             ui_style_box_vec4(preview, UI_BORDER_COLOR, ui->theme->border_color);

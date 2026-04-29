@@ -518,7 +518,7 @@ static Void build_view_editor () {
                 ui_label(0, "title", str("Message preview"));
             }
 
-            preview = ui_markup_view_buf(str("markup"), view->buf, true, 0);
+            preview = ui_markup_view_buf(str("markup"), view->buf, true, 0, 0);
             ui_style_box_vec2(preview, UI_PADDING, ui->theme->padding);
             ui_style_box_vec4(preview, UI_BG_COLOR, ui->theme->bg_color_z3);
             ui_style_box_vec4(preview, UI_BORDER_COLOR, ui->theme->border_color);
