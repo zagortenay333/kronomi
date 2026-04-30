@@ -53,8 +53,8 @@ Here are all the operands:
   due > 2000-01-01
   due \< 2000-01-01
 | If no date is provided, it evals true if task
-  has any due date. Else, it evals true if
-  task has a date that matches the filter.
+  has any due date. Else, it evals true if task
+  has a date that matches the filter.
 |-------------------------------------------------
 | created
   created 2000-01-01
