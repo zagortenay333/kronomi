@@ -1,9 +1,3 @@
-// - add ability to reverse the order in which tasks go into columns
-// - what happens when a deck path is not a file?
-// - select deck immediately when the checkbox is pressed?
-// - word based editor wrapping
-// - when serializing the todo file the body of a task should go on diff line from header
-
 #include "app/app.h"
 #include "ui/ui_widgets.h"
 #include "ui/ui_markup_view.h"
