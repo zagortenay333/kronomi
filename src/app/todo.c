@@ -1917,8 +1917,7 @@ static Void build_view_kanban () {
         }
 
         UiBox *file_button = ui_button(str("file")) {
-            UiBox *icon = ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FILE);
-            if (context->tracked_task_idx != ARRAY_NIL_IDX) ui_style_box_vec4(icon, UI_TEXT_COLOR, ui->theme->text_color_red);
+            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FILE);
             String todo_filepath = {};
             Deck *deck = get_active_deck();
             if (deck) todo_filepath = buf_get_str(deck->path, tm);
