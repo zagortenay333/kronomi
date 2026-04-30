@@ -177,6 +177,7 @@ static Void compute_visual_lines (UiTextView *info, F32 max_width) {
     }
 
     if (line.glyphs.count) push_line();
+    #undef push_line
 }
 
 static Void compute_glyphs (UiTextView *info, SliceUiMarkupRange markup_ranges) {
