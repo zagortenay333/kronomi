@@ -585,6 +585,10 @@ UiBox *ui_ted (String label, Buf *buf, Bool single_line_mode, UiTextEditorWrapMo
             if (before != after) info->scroll_coord.x = info->scroll_coord_n.x = clamp(after / max_knob_h, 0, 1) * max_x_offset;
         }
 
+        if (text_box->signals.hovered) {
+            ui_set_mouse_cursor(MOUSE_CURSOR_TEXT);
+        }
+
         if (text_box->signals.focused && ui->event->tag == EVENT_KEY_PRESS) {
             switch (ui->event->key) {
             case KEY_DEL:
