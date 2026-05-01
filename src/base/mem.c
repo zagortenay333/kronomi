@@ -29,7 +29,7 @@ Void *cmem_op (Void *ctx, MemOp op) {
         break;
     case MEM_OP_ALLOC:
         assert_always(op.size);
-        op.size += padding_to_align(op.size, op.align); // @todo Some asan runtimes require this.
+        op.size += padding_to_align(op.size, op.align); // Some asan runtimes require this.
         result = aligned_alloc(op.align, op.size);
         assert_always(result);
         if (op.zeroed) memset(result, 0, op.size);

@@ -47,7 +47,7 @@ Void push_stack_trace (AString *a, U64 indent, U64 caller_frames_to_skip) {
         }
     } brk:
 
-    array_free(&frames); // @todo Use defer in C2y.
+    array_free(&frames);
 }
 
 String get_stack_trace (Mem *mem, U64 indent, U64 frames_to_skip) {
