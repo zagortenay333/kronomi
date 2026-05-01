@@ -1877,7 +1877,7 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
         }
 
         // Autocompletion with tab:
-        if (ui->event->tag == EVENT_KEY_PRESS && ui->event->key == KEY_TAB) {
+        if (ui->event->tag == EVENT_KEY_PRESS && ui->event->key == KEY_TAB && info->search_results.count) {
             FilePickerSearchResult r = array_get(&info->search_results, 0);
             String search = buf_get_str(info->search, tm);
             String prefix = str_prefix_to_last(search, '/');
