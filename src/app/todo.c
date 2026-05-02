@@ -2327,7 +2327,11 @@ Void todo_view_build (UiViewInstance *, Bool visible) {
     }
 
     execute_commands();
-    if (context->config_mem_fragmentation > 100) load_config();
+    if (context->config_mem_fragmentation > 100) {
+        load_config();
+        push_command(.tag=CMD_VIEW_KANBAN);
+        execute_commands();
+    }
     if (context->tick_id) tic();
 
     switch (context->view.tag) {

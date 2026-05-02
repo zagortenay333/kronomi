@@ -592,7 +592,11 @@ static Void execute_commands () {
 
 Void stopwatch_view_build (UiViewInstance *, Bool visible) {
     execute_commands();
-    if (context->config_mem_fragmentation > 100) load_config();
+    if (context->config_mem_fragmentation > 100) {
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
+        execute_commands();
+    }
 
     array_iter (sw, &context->stopwatches, *) {
         if (sw->state != STOPWATCH_RUNNING) continue;

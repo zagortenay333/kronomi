@@ -581,7 +581,11 @@ static Void execute_commands () {
 
 Void timer_view_build (UiViewInstance *, Bool visible) {
     execute_commands();
-    if (context->config_mem_fragmentation > 100) load_config();
+    if (context->config_mem_fragmentation > 100) {
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
+        execute_commands();
+    }
 
     array_iter (timer, &context->timers, *) {
         if (timer->state != TIMER_RUNNING) continue;

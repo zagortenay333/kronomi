@@ -597,7 +597,11 @@ static Void tick () {
 
 Void alarm_view_build (UiViewInstance *, Bool visible) {
     execute_commands();
-    if (context->config_mem_fragmentation > 100) load_config();
+    if (context->config_mem_fragmentation > 100) {
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
+        execute_commands();
+    }
     if (context->tick_id == 0) context->tick_id = win_tick_start(2000);
     tick();
 
