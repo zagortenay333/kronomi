@@ -487,6 +487,7 @@ static Void load_active_deck () {
 
     context->config_mem_fragmentation += context->tasks.count;
     context->tasks.count = 0;
+    context->non_tasks.count = 0;
 
     tmem_new(tm);
     String file = fs_read_entire_file(context->config_mem, buf_get_str(deck->path, tm), 0);
