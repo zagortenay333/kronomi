@@ -481,13 +481,12 @@ static Void save_active_deck () {
 
 static Void load_active_deck () {
     stop_tracking();
-
-    Deck *deck = get_active_deck();
-    if (! deck) return;
-
     context->config_mem_fragmentation += context->tasks.count;
     context->tasks.count = 0;
     context->non_tasks.count = 0;
+
+    Deck *deck = get_active_deck();
+    if (! deck) return;
 
     tmem_new(tm);
     String file = fs_read_entire_file(context->config_mem, buf_get_str(deck->path, tm), 0);
