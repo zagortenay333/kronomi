@@ -1855,6 +1855,12 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
                     ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 1});
                     if (button->signals.hovered) ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
 
+                    if (r->is_dir) {
+                        ui_style_rule("*") {
+                            ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_blue);
+                        }
+                    }
+
                     U64 selected = array_find(&info->selections, str_match(IT, r->full_path));
                     if (selected != ARRAY_NIL_IDX) ui_tag_box(button, "press");
 
