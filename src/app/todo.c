@@ -344,13 +344,17 @@ static Void task_serialize (U64 idx) {
     if (array_get_last(&a) == ' ') a.count--;
     astr_push_byte(&a, ']');
 
-    MarkupAst *first_child = array_get(&task->ast->children, 0);
-    MarkupAst *last_child  = array_get_last(&task->ast->children);
-    U64 start   = first_child->pos.offset;
-    U64 end     = last_child->pos.offset + last_child->pos.length;
-    String body = str_slice(task->text, start, end-start);
-    astr_push_byte(&a, ' ');
-    astr_push_str(&a, body);
+    if (task->ast->children.count) {
+        MarkupAst *first_child = array_get(&task->ast->children, 0);
+        MarkupAst *last_child  = array_get_last(&task->ast->children);
+        U64 start   = first_child->pos.offset;
+        U64 end     = last_child->pos.offset + last_child->pos.length;
+        String body = str_slice(task->text, start, end-start);
+        astr_push_byte(&a, ' ');
+        astr_push_str(&a, body);
+    }
+
+    if (! str_ends_with(astr_to_str(&a), str("\n"))) astr_push_byte(&a, '\n');
 
     task->text = astr_to_str(&a);
     MarkupAst *root = markup_parse(context->config_mem, task->text);
