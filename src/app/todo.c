@@ -386,8 +386,8 @@ static Void add_tasks (String text, Bool copy_text) {
         if (is_valid_task(node)) {
             add_task(text, node);
         } else {
-            String text = markup_ast_get_text(node, text);
-            array_push(&context->non_tasks, text);
+            String t = markup_ast_get_text(node, text);
+            array_push(&context->non_tasks, t);
         }
     }
 }
@@ -611,8 +611,8 @@ static Void load_config () {
     context->editor_height = config_get_f64(cfg, cfg->root, "editor_height");
     context->time_tracker_file = buf_new(context->config_mem, config_get_string(cfg, cfg->root, "time_tracker_file", tm));
 
-    ConfigAst *sort = config_get_array(cfg, cfg->root, "sort");
-    array_iter (sort, &sort->children) {
+    ConfigAst *sorts = config_get_array(cfg, cfg->root, "sort");
+    array_iter (sort, &sorts->children) {
         Sort s = {
             .ascending = config_get_bool(cfg, sort, "ascending"),
             .by = config_get_u64(cfg, sort, "by"),
@@ -934,7 +934,7 @@ static UiBox *preview_builder (MarkupView *info, MarkupAst *node) {
     if (is_valid_task(node)) {
         add_task(info->text, node);
         EventTag etag = ui->event->tag;
-        ui->event->tag = EVENT_DUMMY; 
+        ui->event->tag = EVENT_DUMMY;
         UiBox *box = build_task(context->tasks.count - 1, 0);
         ui->event->tag = etag;
         return box;
@@ -1783,10 +1783,10 @@ static Void build_view_time_tracker () {
                         TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
                         String text = str_escape(tm, slot->task_str);
                         astr_push_fmt(&astr, "            { \"total\": %lu, \"str\": %.*s  },\n",  it->total, STR(text));
-                        if (ARRAY_ITER_DONE) {
-                            astr.count -= 2; // Get rid of last comma.
-                            astr_push_byte(&astr, '\n');
-                        }
+                    }
+                    if (str_ends_with(astr_to_str(&astr), str(",\n"))) { // Get rid of last comma.
+                        astr.count -= 2;
+                        astr_push_byte(&astr, '\n');
                     }
                     astr_push_cstr(&astr, "        ]\n");
                     astr_push_cstr(&astr, "    }\n");
@@ -2031,9 +2031,9 @@ static Void execute_commands () {
         } break;
 
         case CMD_DEL_TASK: {
-            array_remove(&context->tasks, cmd->idx);
             context->config_mem_fragmentation++;
             if (is_task_tracked(cmd->idx)) stop_tracking();
+            array_remove(&context->tasks, cmd->idx);
             if (! cmd->skip_config_save) save_config(true);
         } break;
 
@@ -2102,15 +2102,15 @@ static Void execute_commands () {
             if (tags.count) {
                 Task *task = array_ref(&context->tasks, cmd->idx);
 
-                if (! (task->config->flags & MARKUP_AST_META_CONFIG_HAS_TAGS)) continue;
+                if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_TAGS) {
+                    array_iter (tag, &tags) map_remove(&task->config->tags, tag);
+                    task_serialize(cmd->idx);
 
-                array_iter (tag, &tags) map_remove(&task->config->tags, tag);
-                task_serialize(cmd->idx);
-
-                if (is_task_tracked(cmd->idx)) stop_tracking();
-                if (! cmd->skip_config_save) {
-                    sort_tasks();
-                    save_active_deck();
+                    if (is_task_tracked(cmd->idx)) stop_tracking();
+                    if (! cmd->skip_config_save) {
+                        sort_tasks();
+                        save_active_deck();
+                    }
                 }
             }
         } break;
@@ -2287,7 +2287,6 @@ static Void tic () {
     Date date = os_get_date();
     Millisec now = os_get_time_ms();
     Millisec dt = now - context->tic_checkpoint;
-    context->active_track_total = sat_add64(context->active_track_total, dt);
 
     U64 time_idx = ARRAY_NIL_IDX;
     { // Find time_idx:
@@ -2301,9 +2300,11 @@ static Void tic () {
         if (time_idx == ARRAY_NIL_IDX) {
             time_idx = slot->time.count;
             array_push_lit(&slot->time, .date=date);
+            context->active_track_total = 0;
         }
     }
 
+    context->active_track_total = sat_add64(context->active_track_total, dt);
     Auto time_slot = array_ref(&slot->time, time_idx);
     time_slot->seconds = context->active_track_total / 1000;
 
