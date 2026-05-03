@@ -724,8 +724,8 @@ UiBox *ui_popup_push (String id, Bool *shown, Bool sideways, UiBox *anchor) {
     ui_style_box_size(overlay, UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
     *shown = true;
-    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) *shown = false;
-    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) *shown = false;
+    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) { ui_eat_event(); *shown = false; }
+    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) { ui_eat_event(); *shown = false; }
 
     UiPopup *info = mem_new(ui->frame_mem, UiPopup);
     info->sideways = sideways;
@@ -798,8 +798,8 @@ UiBox *ui_modal_push (String id, Bool *shown) {
     ui_style_box_size(overlay, UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
     *shown = true;
-    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) *shown = false;
-    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) *shown = false;
+    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) { ui_eat_event(); *shown = false; }
+    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) { ui_eat_event(); *shown = false; }
 
     UiBox *modal = ui_box_push(0, "modal");
     modal->size_fn = size_modal;
@@ -1773,6 +1773,7 @@ istruct (FilePickerSearchResult) {
 istruct (FilePicker) {
     UiBoxData header;
     Buf *search;
+    Buf *file_creation_buf;
     U64 search_version;
     ArrayString selections;
     Array(FilePickerSearchResult) search_results;
@@ -1784,6 +1785,50 @@ static Int cmp_file_picker_results (Void *A, Void *B) {
     return (a->score < b->score) ? 1 : (a->score == b->score) ? 0 : -1;
 }
 
+static Void build_file_creation_popup (String id, FilePicker *info, Bool *opened) {
+    tmem_new(tm);
+
+    ui_box_str(0, id) {
+        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+        ui_style_f32(UI_SPACING, ui->theme->spacing);
+
+        ui_entry(str("entry"), info->file_creation_buf, 25, str("Enter name..."));
+
+        String fullpath;
+
+        { // Build fullpath:
+            String search = buf_get_str(info->search, tm);
+            search        = str_prefix_to_last(search, '/');
+            String name   = buf_get_str(info->file_creation_buf, tm);
+            fullpath      = astr_fmt(tm, "%.*s/%.*s", STR(search), STR(name));
+        }
+
+        ui_button_group(str("linked")) {
+            UiBox *file_button = ui_button(str("file")) {
+                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+                ui_label(UI_BOX_CLICK_THROUGH, "label", str("Make file"));
+                if (file_button->signals.clicked) {
+                    *opened = false;
+                    buf_clear(info->file_creation_buf);
+                    info->search_version = buf_get_version(info->search) - 1;
+                    fs_make_file(fullpath);
+                }
+            }
+
+            UiBox *dir_button = ui_button(str("dir")) {
+                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+                ui_label(UI_BOX_CLICK_THROUGH, "label", str("Make dir"));
+                if (dir_button->signals.clicked) {
+                    *opened = false;
+                    buf_clear(info->file_creation_buf);
+                    info->search_version = buf_get_version(info->search) - 1;
+                    fs_make_dir(fullpath);
+                }
+            }
+        }
+    }
+}
+
 UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir_only, String start_dir) {
     tmem_new(tm);
 
@@ -1792,6 +1837,7 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
         if (! info->search) {
             String dir = start_dir.count ? start_dir : fs_get_current_working_dir(tm);
             info->search = buf_new(info->header.mem, dir);
+            info->file_creation_buf = buf_new(info->header.mem, str(""));
             array_init(&info->search_results, info->header.mem);
             array_init(&info->selections, info->header.mem);
         }
@@ -1799,6 +1845,7 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
         ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
         ui_style_f32(UI_SPACING, ui->theme->spacing);
 
+        UiBox *entry;
         UiBox *ok_button;
         UiTextEditorInfo *search_text_box_info;
 
@@ -1806,7 +1853,7 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
             ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_CHILDREN_SUM, 0, 1});
             ui_style_f32(UI_SPACING, ui->theme->spacing);
 
-            UiBox *entry = ui_entry(str("entry"), info->search, 64, str(""));
+            entry = ui_entry(str("entry"), info->search, 64, str(""));
             UiBox *inner = array_get(&entry->children, 0);
             ui_style_box_size(inner, UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
             search_text_box_info = ui_get_box_data(inner, 0, 0);
@@ -1815,7 +1862,21 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
                 ui_ted_cursor_move_to_end(search_text_box_info, &search_text_box_info->cursor, true);
             }
 
-            ok_button = ui_button_label_str(str("ok_button"), str("Ok"));
+            ui_button_group(str("linked")) {
+                ok_button = ui_button_label_str(str("ok_button"), str("Ok"));
+
+                UiBox *add_button = ui_button(str("add_button")) {
+                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
+                    Bool opened = add_button->scratch;
+                    if (opened || add_button->signals.clicked) {
+                        ui_tag("press");
+                        ui_popup(str("popup"), &opened, false, add_button) {
+                            build_file_creation_popup(str("content"), info, &opened);
+                        }
+                    }
+                    add_button->scratch = opened;
+                }
+            }
         }
 
         // Gather and sort results:
@@ -1894,9 +1955,9 @@ UiBox *ui_file_picker (String id, Buf *buf, Bool *shown, Bool multiple, Bool dir
         }
 
         // Commit selections:
-        if (ok_button->signals.clicked ||
+        if ((ok_button->signals.clicked) ||
             (!multiple && info->selections.count) ||
-            (ui->event->tag == EVENT_KEY_PRESS && ui->event->key == KEY_RETURN)
+            (ui_is_descendant(entry, ui->focused) && ui->event->tag == EVENT_KEY_PRESS && ui->event->key == KEY_RETURN)
         ) {
             ui_eat_event();
             *shown = false;
