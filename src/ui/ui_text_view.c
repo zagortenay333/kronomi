@@ -102,7 +102,7 @@ static Void compute_visual_lines (UiTextView *info, F32 max_width) {
 
     info->lines.count = 0;
 
-    if (max_width == 0) return;
+    if (max_width <= 0) return;
     if (info->styled_glyphs.count == 0) return;
 
     info->viewport_width = max_width;
@@ -274,7 +274,7 @@ static Void draw (UiBox *box) {
     if (info->viewport_width != max_width) compute_visual_lines(info, max_width);
 
     array_iter (line, &info->lines, *) {
-        U32 x_offset = array_get(&line->glyphs, 0).glyph->x;
+        U32 x_offset = line->glyphs.count ? array_get(&line->glyphs, 0).glyph->x : 0;
 
         array_iter (styled_glyph, &line->glyphs) {
             UiMarkup *markup = styled_glyph.markup;
