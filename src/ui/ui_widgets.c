@@ -625,6 +625,7 @@ Void ui_scroll_box_pop () {
 
 istruct (UiPopup) {
     Bool sideways;
+    Bool *shown;
     UiBox *anchor;
 };
 
@@ -723,12 +724,9 @@ UiBox *ui_popup_push (String id, Bool *shown, Bool sideways, UiBox *anchor) {
     ui_style_box_size(overlay, UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
     ui_style_box_size(overlay, UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
-    *shown = true;
-    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) { ui_eat_event(); *shown = false; }
-    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) { ui_eat_event(); *shown = false; }
-
     UiPopup *info = mem_new(ui->frame_mem, UiPopup);
     info->sideways = sideways;
+    info->shown = shown;
     info->anchor = anchor;
     overlay->scratch = cast(U64, info);
 
@@ -753,8 +751,15 @@ UiBox *ui_popup_push (String id, Bool *shown, Bool sideways, UiBox *anchor) {
 }
 
 Void ui_popup_pop () {
+
     ui_scroll_box_pop();
-    ui_pop_parent();
+
+    UiBox *overlay = ui_pop_parent();
+    UiPopup *info = cast(UiPopup*, overlay->scratch);
+    *info->shown = true;
+    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) { ui_eat_event(); *info->shown = false; }
+    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) { ui_eat_event(); *info->shown = false; }
+
     ui_pop_clip();
     ui_pop_parent();
 }
@@ -796,10 +801,7 @@ UiBox *ui_modal_push (String id, Bool *shown) {
     ui_style_box_f32(overlay, UI_FLOAT_Y, 0);
     ui_style_box_size(overlay, UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
     ui_style_box_size(overlay, UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-
-    *shown = true;
-    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) { ui_eat_event(); *shown = false; }
-    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) { ui_eat_event(); *shown = false; }
+    overlay->scratch = cast(U64, shown);
 
     UiBox *modal = ui_box_push(0, "modal");
     modal->size_fn = size_modal;
@@ -820,7 +822,13 @@ UiBox *ui_modal_push (String id, Bool *shown) {
 
 Void ui_modal_pop () {
     ui_pop_parent();
-    ui_pop_parent();
+
+    UiBox *overlay = ui_pop_parent();
+    Bool *shown = cast(Bool*, overlay->scratch);
+    *shown = true;
+    if ((ui->event->tag == EVENT_KEY_PRESS) && (ui->event->key == KEY_ESC)) { ui_eat_event(); *shown = false; }
+    if (overlay->signals.clicked && ui->event->key == KEY_MOUSE_LEFT) { ui_eat_event(); *shown = false; }
+
     ui_pop_clip();
     ui_pop_parent();
 }
