@@ -2036,8 +2036,11 @@ static Void execute_commands () {
 
         case CMD_DEL_TASK: {
             context->config_mem_fragmentation++;
-            if (is_task_tracked(cmd->idx)) stop_tracking();
-            if (cmd->idx < context->tracked_task_idx) context->tracked_task_idx--;
+            if (is_task_tracked(cmd->idx)) {
+                stop_tracking();
+            } else if (cmd->idx < context->tracked_task_idx) {
+                context->tracked_task_idx--;
+            }
             array_remove(&context->tasks, cmd->idx);
             if (! cmd->skip_config_save) save_config(true);
         } break;
