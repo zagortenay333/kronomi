@@ -805,7 +805,6 @@ static MarkupAst *parse_filter_hide (Parser *p) {
 static MarkupAst *parse_filter_track (Parser *p) {
     MarkupAst *node = make_node(p, MARKUP_AST_FILTER_TRACK);
     lex_eat(p->lex);
-    lex_eat(p->lex);
     lex_try_eat(p->lex, TOKEN_SPACES);
 
     Token *id = lex_eat(p->lex);
