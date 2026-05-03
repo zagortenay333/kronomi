@@ -944,7 +944,11 @@ static Void execute_commands () {
         case CMD_DEL_DECK: {
             array_remove(&context->decks, cmd.idx);
             context->config_mem_fragmentation++;
-            if (cmd.idx == context->active_deck_idx) load_active_deck();
+            if (cmd.idx == context->active_deck_idx) {
+                load_active_deck();
+            } else if (cmd.idx < context->active_deck_idx) {
+                context->active_deck_idx--;
+            }
             if (! cmd.skip_config_save) save_config();
         } break;
 
