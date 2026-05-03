@@ -709,11 +709,13 @@ static Void build_view_card_editor () {
         if (w != context->editor_width || h != context->editor_height) save_config();
 
         ui_box(UI_BOX_INVISIBLE_BG, "rows") {
-            ui_box(0, "bucket_picker") {
+            UiBox *box = ui_box(0, "bucket_picker") {
                 ui_tag("row");
                 ui_label(0, "title", str("Bucket"));
                 ui_hspacer();
-                if (view->card_idx != ARRAY_NIL_IDX) view->bucket = array_ref(&context->cards, view->card_idx)->bucket;
+                if (box->start_frame == ui->frame && view->card_idx != ARRAY_NIL_IDX) {
+                    view->bucket = array_ref(&context->cards, view->card_idx)->bucket;
+                }
                 I64 val = view->bucket;
                 UiBox *picker = ui_int_picker(str("picker"), &val, 0, 5, 1);
                 view->bucket = val;
