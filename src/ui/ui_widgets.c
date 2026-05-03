@@ -980,7 +980,7 @@ UiBox *ui_dropdown (String id, U64 *selection, SliceString options) {
             container->scratch = opened;
         }
 
-        *selection = clamp(*selection, 0u, options.count);
+        *selection = clamp(*selection, 0u, options.count ? options.count-1 : 0);
         String text = array_get(&options, *selection);
         ui_label(UI_BOX_CLICK_THROUGH, "label", text);
     }
