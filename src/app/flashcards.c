@@ -401,16 +401,12 @@ static Void build_view_search_cards () {
 
         if (view->fuzzy_search) array_sort_cmp(&view->searched_cards, app_cmp_search_results);
 
-        Bool card_deleted = false;
-
         array_iter (card, &view->searched_cards, *) {
             if (ARRAY_IDX == view->show_more_idx) break;
-            build_card(card->idx, &card_deleted, true);
+            build_card(card->idx, 0, true);
         }
 
         app_show_more_button(str("show_more"), &view->show_more_idx, view->searched_cards.count);
-
-        if (card_deleted) view->search_buf_version--; // To refresh the searched_cards array.
     }
 }
 
