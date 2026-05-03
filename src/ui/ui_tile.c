@@ -97,6 +97,8 @@ static Void tile_remove_empty_leaf (UiTile *info, UiTileNode *node) {
 }
 
 static Void build_tabs_panel (UiTile *info, UiTileNode *node) {
+    tmem_new(tm);
+
     F32 b = ui->theme->border_width.x;
 
     UiBox *tabs_panel = ui_scroll_box(str("tabs_panel"), false) {
@@ -244,7 +246,6 @@ static Void build_tabs_panel (UiTile *info, UiTileNode *node) {
                 ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
 
                 Bool open = add_button->scratch;
-                tmem_new(tm);
                 if (open || add_button->signals.clicked) {
                     ui_popup(str("popup"), &open, false, add_button) {
                         array_iter (t, &info->view_store->types) {
