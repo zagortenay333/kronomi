@@ -2449,6 +2449,7 @@ static Void tic () {
     Task *task = array_ref(&context->tasks, context->tracked_task_idx);
     TimeTrackerSlot *slot = array_ref(&context->tracker_slots, task->config->track);
 
+    printf("%.*s\n", STR(task->text));
     assert_dbg(task->config->flags & MARKUP_AST_META_CONFIG_HAS_TRACK);
 
     Date date = os_get_date();
