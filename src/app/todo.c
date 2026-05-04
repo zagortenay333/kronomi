@@ -2197,7 +2197,7 @@ static Void execute_commands () {
             context->config_mem_fragmentation++;
             if (is_task_tracked(cmd->idx)) {
                 stop_tracking();
-            } else if (cmd->idx < context->tracked_task_idx) {
+            } else if (context->tracked_task_idx != ARRAY_NIL_IDX && cmd->idx < context->tracked_task_idx) {
                 context->tracked_task_idx--;
             }
             array_remove(&context->tasks, cmd->idx);
