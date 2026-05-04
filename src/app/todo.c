@@ -57,8 +57,13 @@ istruct (TimeTrackerSlot) {
     Array(struct { Date date; Seconds seconds; }) time;
 };
 
+ienum (MainViewTag, U8) {
+    MAIN_VIEW_SPARSE,
+    MAIN_VIEW_COMPACT,
+};
+
 ienum (ViewTag, U8) {
-    VIEW_KANBAN,
+    VIEW_MAIN,
     VIEW_SEARCH,
     VIEW_EDITOR,
     VIEW_SORT,
@@ -74,7 +79,7 @@ istruct (View) {
             Bool has_filters;
             ArrayString filters;
             Array(KanbanColumn*) columns;
-        } kanban;
+        } main;
 
         struct {
             Bool dragging;
@@ -143,7 +148,7 @@ ienum (CommandTag, U8) {
     CMD_DEL_DECK,
     CMD_ACTIVATE_DECK,
     CMD_CHANGE_SORT,
-    CMD_VIEW_KANBAN,
+    CMD_VIEW_MAIN,
     CMD_VIEW_EDITOR,
     CMD_VIEW_SORT,
     CMD_VIEW_SEARCH,
@@ -164,6 +169,7 @@ istruct (Command) {
 istruct (Context) {
     View view;
     Mem *view_mem;
+    MainViewTag main_view_type;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -560,6 +566,7 @@ static Void save_config (Bool save_deck) {
     astr_push_fmt(&astr, "version = %lu\n", context->config_version);
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
+    astr_push_fmt(&astr, "view_type = %u\n", context->main_view_type);
 
     String time_tracker_file = buf_get_str(context->time_tracker_file, tm);
     astr_push_fmt(&astr, "time_tracker_file = \"%.*s\"\n", STR(time_tracker_file));
@@ -611,8 +618,9 @@ static Void load_config () {
         return;
     }
 
-    context->editor_width  = config_get_f64(cfg, cfg->root, "editor_width");
+    context->editor_width = config_get_f64(cfg, cfg->root, "editor_width");
     context->editor_height = config_get_f64(cfg, cfg->root, "editor_height");
+    context->main_view_type = config_get_u64(cfg, cfg->root, "view_type");
     context->time_tracker_file = buf_new(context->config_mem, config_get_string(cfg, cfg->root, "time_tracker_file", tm));
 
     ConfigAst *sorts = config_get_array(cfg, cfg->root, "sort");
@@ -713,130 +721,24 @@ static void build_tracker_popup (U64 idx) {
     }
 }
 
-static UiBox *build_task (U64 idx, Bool *out_deleted) {
+static Void build_task_body (U64 idx) {
     tmem_new(tm);
 
     Task *task = array_ref(&context->tasks, idx);
 
-    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", idx) {
-        ui_tag("card");
-        ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
+    ui_style_rule(".tag_button") {
+        ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
+        ui_style_vec2(UI_PADDING, vec2(4, 2));
+    }
 
-        if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_HIDE) {
-            ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
-        }
-
-        if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_DUE) {
-            Date today = os_get_date();
-            Date due = os_str_to_date(task->config->due);
-            if (os_date_cmp(due, today) == -1 && !(task->config->flags & MARKUP_AST_META_CONFIG_HAS_DONE)) {
-                ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
-            }
-        }
-
-        ui_box(0, "header") {
-            if (is_task_tracked(idx)) {
-                ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
-            }
-
-            Bool checked = task->config->flags & MARKUP_AST_META_CONFIG_HAS_DONE;
-            UiBox *checkbox = ui_checkbox("checkbox", &checked);
-            if (checkbox->signals.clicked) {
-                push_command(.tag=CMD_TOGGLE_TASK_DONE, .idx=idx);
-                push_command(.tag=CMD_VIEW_KANBAN);
-            }
-
-            ui_hspacer();
-
-            if (ui_within_box(box->rect, ui->mouse) || (ui->focused && ui_is_descendant(box, ui->focused))) {
-                ui_box(0, "autohide_icons") {
-                    UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
-                        ui_tag("button");
-                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=idx);
-                    }
-
-                    UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
-                        ui_tag("button");
-                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
-                        if (delete_button->signals.clicked) {
-                            if (out_deleted) *out_deleted = true;
-                            push_command(.tag=CMD_DEL_TASK, .idx=idx);
-                        }
-                    }
-
-                    UiBox *tracker_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "tracker") {
-                        ui_tag("button");
-                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TIME_TRACKER);
-                        Bool opened = tracker_button->scratch;
-
-                        if (opened || tracker_button->signals.clicked) {
-                            ui_tag("press");
-                            ui_grab_focus(box);
-                            ui_popup(str("popup"), &opened, false, tracker_button) {
-                                ui_box(0, "popup") {
-                                    ui_style_f32(UI_SPACING, ui->theme->spacing);
-                                    ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-                                    build_tracker_popup(idx);
-                                }
-                            }
-                        }
-
-                        tracker_button->scratch = opened;
-                    }
-
-                    if (! (task->config->flags & MARKUP_AST_META_CONFIG_HAS_PIN)) {
-                        UiBox *pin_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "pin") {
-                            ui_tag("button");
-                            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PIN);
-                            if (pin_button->signals.clicked) {
-                                push_command(.tag=CMD_NEW_TASK_FLAGS, .idx=idx, .flags=(task->config->flags | MARKUP_AST_META_CONFIG_HAS_PIN));
-                                push_command(.tag=CMD_VIEW_KANBAN);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_PIN) {
-                UiBox *pin_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "pin") {
-                    ui_tag("button");
-                    ui_style_rule(".button *") { ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_green); }
-                    ui_style_rule(".button.hover *") { ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_blue); }
-                    ui_style_rule(".button.focus") {
-                        ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color_focus);
-                        ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width_focus);
-                    }
-
-                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PIN);
-                    pin_button->next_style.size.width.strictness = 1;
-                    if (pin_button->signals.clicked) {
-                        push_command(.tag=CMD_NEW_TASK_FLAGS, .idx=idx, .flags=(task->config->flags & ~MARKUP_AST_META_CONFIG_HAS_PIN));
-                        push_command(.tag=CMD_VIEW_KANBAN);
-                    }
-                }
-            }
-
-            if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_HIDE) {
-                UiBox *hide_button = ui_box(0, "hide") {
-                    hide_button->next_style.size.width.strictness = 1;
-                    ui_tag("button");
-                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_HIDDEN);
-                }
-            }
-        }
-
-        ui_style_rule(".tag_button") {
-            ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
-            ui_style_vec2(UI_PADDING, vec2(4, 2));
-        }
+    ui_box(0, "body") {
+        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+        ui_style_f32(UI_SPACING, ui->theme->spacing);
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
         if (task->config->flags & (MARKUP_AST_META_CONFIG_HAS_PRIORITY | MARKUP_AST_META_CONFIG_HAS_DUE | MARKUP_AST_META_CONFIG_HAS_CREATED | MARKUP_AST_META_CONFIG_HAS_COMPLETED)) {
-            ui_box(UI_BOX_INVISIBLE_BG, "padding_dates") ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui->theme->padding.y, 1});
-
             ui_box(0, "dates") {
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
-                ui_style_vec2(UI_PADDING, vec2(ui->theme->padding.x, 0));
 
                 if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_PRIORITY) {
                     UiBox *priority_button = ui_button(str("priority_button")) {
@@ -884,12 +786,9 @@ static UiBox *build_task (U64 idx, Bool *out_deleted) {
         }
 
         if (task->config->tags.umap.count) {
-            ui_box(UI_BOX_INVISIBLE_BG, "padding_tags") ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui->theme->padding.y, 1});
-
             ui_box(0, "tags") {
                 ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
-                ui_style_vec2(UI_PADDING, vec2(ui->theme->padding.x, 0));
 
                 U64 col_count = 0;
                 U64 row_count = 0;
@@ -920,12 +819,175 @@ static UiBox *build_task (U64 idx, Bool *out_deleted) {
             }
         }
 
-        ui_box(0, "body") {
-            String text = markup_ast_get_text(task->ast, task->text);
-            String clicked_tag = {};
-            ui_markup_view(str("markup"), text, &clicked_tag);
-            if (clicked_tag.data) push_command(.tag=CMD_VIEW_SEARCH, .str=clicked_tag);
+        String text = markup_ast_get_text(task->ast, task->text);
+        String clicked_tag = {};
+        ui_markup_view(str("markup"), text, &clicked_tag);
+        if (clicked_tag.data) push_command(.tag=CMD_VIEW_SEARCH, .str=clicked_tag);
+    }
+}
+
+static UiBox *build_task (U64 idx, Bool compact, Bool *out_deleted) {
+    Task *task = array_ref(&context->tasks, idx);
+
+    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "task%lu", idx) {
+        ui_tag("card");
+        ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
+
+        if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_HIDE) {
+            ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
         }
+
+        if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_DUE) {
+            Date today = os_get_date();
+            Date due = os_str_to_date(task->config->due);
+            if (os_date_cmp(due, today) == -1 && !(task->config->flags & MARKUP_AST_META_CONFIG_HAS_DONE)) {
+                ui_style_rule(".card") ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
+            }
+        }
+
+        if (compact) {
+            ui_style_rule(".card #header") {
+                ui_style_vec4(UI_RADIUS, ui->theme->radius);
+                ui_style_vec4(UI_BORDER_WIDTHS, vec4(0, 0, 0, 0));
+            }
+        }
+
+        ui_box(0, "header") {
+            if (is_task_tracked(idx)) {
+                ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
+            }
+
+            Bool checked = task->config->flags & MARKUP_AST_META_CONFIG_HAS_DONE;
+            UiBox *checkbox = ui_checkbox("checkbox", &checked);
+            if (checkbox->signals.clicked) {
+                push_command(.tag=CMD_TOGGLE_TASK_DONE, .idx=idx);
+                push_command(.tag=CMD_VIEW_MAIN);
+            }
+
+            if (compact) {
+                String text = {};
+                if (task->ast->children.count) {
+                    MarkupAst *first_child = array_get(&task->ast->children, 0);
+                    if (first_child->tag == MARKUP_AST_PARAGRAPH) {
+                        text = markup_ast_get_text(first_child, task->text);
+                        text = str_prefix_to_first(text, '\n');
+                    }
+                }
+
+                String clicked_tag = {};
+                UiBox *m = ui_markup_view(str("markup"), text, &clicked_tag);
+                m->flags |= UI_BOX_CLIPPING;
+                Font *font = font_get(ui->font_cache, ui->config->font_path_normal, ui->config->font_size);
+                ui_style_box_size(m, UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, font->height, 1});
+
+                if (clicked_tag.data) push_command(.tag=CMD_VIEW_SEARCH, .str=clicked_tag);
+            } else {
+                ui_hspacer();
+            }
+
+            if (ui_within_box(box->rect, ui->mouse) || (ui->focused && ui_is_descendant(box, ui->focused))) {
+                ui_box(0, "autohide_icons") {
+                    if (compact) {
+                        UiBox *preview_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "preview") {
+                            ui_tag("button");
+                            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EYE);
+                            Bool opened = preview_button->scratch;
+
+                            if (opened || preview_button->signals.clicked) {
+                                ui_tag("press");
+                                ui_grab_focus(box);
+                                ui_popup(str("popup"), &opened, false, preview_button) {
+                                    ui_box(0, "popup") {
+                                        ui_tag("card");
+                                        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 0});
+                                        ui_style_f32(UI_SPACING, ui->theme->spacing);
+                                        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+                                        build_task_body(idx);
+                                    }
+                                }
+                            }
+
+                            preview_button->scratch = opened;
+                        }
+                    }
+
+                    UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
+                        ui_tag("button");
+                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
+                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=idx);
+                    }
+
+                    UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
+                        ui_tag("button");
+                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
+                        if (delete_button->signals.clicked) {
+                            if (out_deleted) *out_deleted = true;
+                            push_command(.tag=CMD_DEL_TASK, .idx=idx);
+                        }
+                    }
+
+                    UiBox *tracker_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "tracker") {
+                        ui_tag("button");
+                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TIME_TRACKER);
+                        Bool opened = tracker_button->scratch;
+
+                        if (opened || tracker_button->signals.clicked) {
+                            ui_tag("press");
+                            ui_grab_focus(box);
+                            ui_popup(str("popup"), &opened, false, tracker_button) {
+                                ui_box(0, "popup") {
+                                    ui_style_f32(UI_SPACING, ui->theme->spacing);
+                                    ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+                                    build_tracker_popup(idx);
+                                }
+                            }
+                        }
+
+                        tracker_button->scratch = opened;
+                    }
+
+                    if (! (task->config->flags & MARKUP_AST_META_CONFIG_HAS_PIN)) {
+                        UiBox *pin_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "pin") {
+                            ui_tag("button");
+                            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PIN);
+                            if (pin_button->signals.clicked) {
+                                push_command(.tag=CMD_NEW_TASK_FLAGS, .idx=idx, .flags=(task->config->flags | MARKUP_AST_META_CONFIG_HAS_PIN));
+                                push_command(.tag=CMD_VIEW_MAIN);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_PIN) {
+                UiBox *pin_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "pin") {
+                    ui_tag("button");
+                    ui_style_rule(".button *") { ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_green); }
+                    ui_style_rule(".button.hover *") { ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_blue); }
+                    ui_style_rule(".button.focus") {
+                        ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color_focus);
+                        ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width_focus);
+                    }
+
+                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PIN);
+                    pin_button->next_style.size.width.strictness = 1;
+                    if (pin_button->signals.clicked) {
+                        push_command(.tag=CMD_NEW_TASK_FLAGS, .idx=idx, .flags=(task->config->flags & ~MARKUP_AST_META_CONFIG_HAS_PIN));
+                        push_command(.tag=CMD_VIEW_MAIN);
+                    }
+                }
+            }
+
+            if (task->config->flags & MARKUP_AST_META_CONFIG_HAS_HIDE) {
+                UiBox *hide_button = ui_box(0, "hide") {
+                    hide_button->next_style.size.width.strictness = 1;
+                    ui_tag("button");
+                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_HIDDEN);
+                }
+            }
+        }
+
+        if (! compact) build_task_body(idx);
     }
 
     return box;
@@ -939,7 +1001,7 @@ static UiBox *preview_builder (MarkupView *info, MarkupAst *node) {
         add_task(info->text, node);
         EventTag etag = ui->event->tag;
         ui->event->tag = EVENT_DUMMY;
-        UiBox *box = build_task(context->tasks.count - 1, 0);
+        UiBox *box = build_task(context->tasks.count - 1, false, 0);
         ui->event->tag = etag;
         return box;
     } else {
@@ -1005,7 +1067,7 @@ static Void build_view_editor () {
                 UiBox *cancel_button = ui_button(str("cancel")) {
                     ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                     ui_label(UI_BOX_CLICK_THROUGH, "label", str("Cancel"));
-                    if (cancel_button->signals.clicked) push_command(.tag=CMD_VIEW_KANBAN);
+                    if (cancel_button->signals.clicked) push_command(.tag=CMD_VIEW_MAIN);
                 }
 
                 UiBox *ok_button = ui_button(str("ok")) {
@@ -1015,7 +1077,7 @@ static Void build_view_editor () {
                         if (view->task_idx != ARRAY_NIL_IDX) push_command(.tag=CMD_DEL_TASK, .idx=view->task_idx, .skip_config_save=true);
                         String str = buf_get_str(view->buf, context->config_mem);
                         push_command(.tag=CMD_ADD_TASKS, .str=str);
-                        push_command(.tag=CMD_VIEW_KANBAN);
+                        push_command(.tag=CMD_VIEW_MAIN);
                     }
                 }
             }
@@ -1118,7 +1180,7 @@ static Void build_view_search () {
             UiBox *close_button = ui_button(str("close")) {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Close"));
-                if (close_button->signals.clicked) push_command(.tag=CMD_VIEW_KANBAN);
+                if (close_button->signals.clicked) push_command(.tag=CMD_VIEW_MAIN);
             }
 
             UiBox *apply_button = ui_button(str("apply")) {
@@ -1179,7 +1241,7 @@ static Void build_view_search () {
 
         array_iter (task_idx, &view->searched) {
             if (ARRAY_IDX == view->show_more_idx) break;
-            build_task(task_idx, &deleted);
+            build_task(task_idx, false, &deleted);
         }
 
         app_show_more_button(str("show_more"), &view->show_more_idx, view->searched.count);
@@ -1296,7 +1358,7 @@ static Void build_view_sort () {
             UiBox *close_button = ui_button(str("close")) {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Close"));
-                if (close_button->signals.clicked) push_command(.tag=CMD_VIEW_KANBAN);
+                if (close_button->signals.clicked) push_command(.tag=CMD_VIEW_MAIN);
             }
 
             ui_button_info_popup(str("help_button"), true, str("data/docs/sort.txt"), true);
@@ -1314,7 +1376,7 @@ static Void build_view_sort () {
         array_iter (_, &context->tasks, *) {
             _;
             if (ARRAY_IDX == view->show_more) break;
-            build_task(ARRAY_IDX, 0);
+            build_task(ARRAY_IDX, false, 0);
         }
 
         app_show_more_button(str("show_more"), &view->show_more, context->tasks.count);
@@ -1347,7 +1409,7 @@ static Void build_view_deck_browser () {
                         array_iter (deck, &context->decks, *) if (deck->active) active_deck_idx = ARRAY_IDX;
                         push_command(.tag=CMD_SAVE_CONFIG);
                         push_command(.tag=CMD_ACTIVATE_DECK, .idx=active_deck_idx);
-                        push_command(.tag=CMD_VIEW_KANBAN);
+                        push_command(.tag=CMD_VIEW_MAIN);
                     }
                 }
 
@@ -1763,7 +1825,7 @@ static Void build_view_time_tracker () {
             UiBox *close_button = ui_button(str("close")) {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Close"));
-                if (close_button->signals.clicked) push_command(.tag=CMD_VIEW_KANBAN);
+                if (close_button->signals.clicked) push_command(.tag=CMD_VIEW_MAIN);
             }
 
             UiBox *copy_button = ui_button(str("copy")) {
@@ -1876,12 +1938,133 @@ static Void build_view_time_tracker () {
     }
 }
 
-static Void build_view_kanban () {
+static Void build_view_main_compact () {
+    Auto view = &context->view.main;
+
+    ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+
+    ui_box(0, "cards") {
+        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+        ui_style_f32(UI_SPACING, ui->theme->spacing*3);
+        ui_style_vec2(UI_PADDING, ui->theme->padding);
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 1});
+
+        array_iter (column, &view->columns) {
+            ui_box_fmt(0, "row%lu", ARRAY_IDX) {
+                ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+                ui_style_f32(UI_SPACING, ui->theme->spacing);
+
+                if (column->with_header) {
+                    UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
+                        ui_tag("card");
+
+                        ui_style_rule(".card") {
+                            ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
+                            ui_style_vec4(UI_BG_COLOR, vec4(0, 0, 0, 0));
+                            ui_style_vec4(UI_RADIUS, vec4(0, 0, 0, 0));
+                            ui_style_vec4(UI_BORDER_WIDTHS, vec4(0, 0, 0, 0));
+                        }
+
+                        ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size*1.25, false);
+                        ui_hspacer();
+
+                        if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
+                            ui_box(0, "autohide_icons") {
+                                UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
+                                    ui_tag("button");
+                                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
+                                    search_button->next_style.size.width.strictness = 1;
+                                    if (search_button->signals.clicked) {
+                                        AString filter = astr_new(context->view_mem);
+                                        array_iter (c, &view->columns) {
+                                            if (c == column) break;
+                                            astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                                        }
+                                        astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
+                                        push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                array_iter (task, &column->tasks) {
+                    if (ARRAY_IDX == column->show_more_idx) break;
+                    Bool deleted = false;
+                    build_task(task, true, &deleted);
+                    if (deleted) push_command(.tag=CMD_VIEW_MAIN); // To recompute the cached columns.
+                }
+
+                app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
+            }
+        }
+    }
+}
+
+static Void build_view_main_sparse () {
+    Auto view = &context->view.main;
+
+    if (! view->has_filters) ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+
+    ui_box(0, "cards") {
+        ui_style_f32(UI_SPACING, ui->theme->spacing);
+        ui_style_vec2(UI_PADDING, ui->theme->padding);
+
+        array_iter (column, &view->columns) {
+            ui_box_fmt(0, "column%lu", ARRAY_IDX) {
+                ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+                ui_style_f32(UI_SPACING, ui->theme->spacing);
+
+                if (column->with_header) {
+                    UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
+                        ui_tag("card");
+                        ui_style_rule(".card") ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
+                        ui_style_vec2(UI_PADDING, ui->theme->padding);
+
+                        ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size, false);
+                        ui_hspacer();
+
+                        if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
+                            ui_box(0, "autohide_icons") {
+                                UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
+                                    ui_tag("button");
+                                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
+                                    search_button->next_style.size.width.strictness = 1;
+                                    if (search_button->signals.clicked) {
+                                        AString filter = astr_new(context->view_mem);
+                                        array_iter (c, &view->columns) {
+                                            if (c == column) break;
+                                            astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                                        }
+                                        astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
+                                        push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                array_iter (task, &column->tasks) {
+                    if (ARRAY_IDX == column->show_more_idx) break;
+                    Bool deleted = false;
+                    build_task(task, false, &deleted);
+                    if (deleted) push_command(.tag=CMD_VIEW_MAIN); // To recompute the cached columns.
+                }
+
+                app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
+            }
+        }
+    }
+}
+
+static Void build_view_main () {
     tmem_new(tm);
-    Auto view = &context->view.kanban;
 
     ui_box(0, "navbox") {
         ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+        ui_style_f32(UI_SPACING, ui->theme->spacing);
         ui_style_vec2(UI_PADDING, ui->theme->padding);
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_CHILDREN_SUM, 0, 1});
 
@@ -1889,45 +2072,68 @@ static Void build_view_kanban () {
         ui_style_rule(".button:first") { ui_style_vec4(UI_RADIUS, vec4(ui->theme->radius.x, ui->theme->radius.x, 0, 0)); }
         ui_style_rule(".button:last")  { ui_style_vec4(UI_RADIUS, vec4(0, 0, ui->theme->radius.x, ui->theme->radius.x)); }
 
-        UiBox *add_button = ui_button(str("add")) {
-            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
-            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=ARRAY_NIL_IDX);
-            if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add task")); }
+        ui_box(0, "group0") {
+            ui_style_rule(".button.press *") { ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_blue); }
+            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+
+            UiBox *sparse_button = ui_button(str("sparse")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_KANBAN);
+                if (context->main_view_type == MAIN_VIEW_SPARSE) ui_tag("press");
+                if (sparse_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Sparse view")); }
+                if (sparse_button->signals.clicked) { context->main_view_type = MAIN_VIEW_SPARSE; save_config(false); }
+            }
+
+            UiBox *compact_button = ui_button(str("compact")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EXAM);
+                if (context->main_view_type == MAIN_VIEW_COMPACT) ui_tag("press");
+                if (compact_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Compact view")); }
+                if (compact_button->signals.clicked) { context->main_view_type = MAIN_VIEW_COMPACT; save_config(false); }
+            }
         }
 
-        UiBox *search_button = ui_button(str("search")) {
-            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
-            if (search_button->signals.clicked) push_command(.tag=CMD_VIEW_SEARCH);
-            if (search_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Search tasks")); }
-        }
+        ui_box(0, "group1") {
+            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
 
-        UiBox *deck_button = ui_button(str("deck")) {
-            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FOLDER);
-            if (deck_button->signals.clicked) push_command(.tag=CMD_VIEW_DECK_BROWSER);
-            if (deck_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Browse decks")); }
-        }
+            UiBox *add_button = ui_button(str("add")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
+                if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=ARRAY_NIL_IDX);
+                if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add task")); }
+            }
 
-        UiBox *sort_button = ui_button(str("sort")) {
-            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SORT_ASC);
-            if (sort_button->signals.clicked) push_command(.tag=CMD_VIEW_SORT);
-            if (sort_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Sort tasks")); }
-        }
+            UiBox *search_button = ui_button(str("search")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
+                if (search_button->signals.clicked) push_command(.tag=CMD_VIEW_SEARCH);
+                if (search_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Search tasks")); }
+            }
 
-        UiBox *tracker_button = ui_button(str("tracker")) {
-            UiBox *icon = ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TIME_TRACKER);
-            if (context->tracked_task_idx != ARRAY_NIL_IDX) ui_style_box_vec4(icon, UI_TEXT_COLOR, ui->theme->text_color_red);
-            if (tracker_button->signals.clicked) push_command(.tag=CMD_VIEW_TIME_TRACKER, .idx=ARRAY_NIL_IDX);
-            if (tracker_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Time tracker")); }
-        }
+            UiBox *deck_button = ui_button(str("deck")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FOLDER);
+                if (deck_button->signals.clicked) push_command(.tag=CMD_VIEW_DECK_BROWSER);
+                if (deck_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Browse decks")); }
+            }
 
-        UiBox *file_button = ui_button(str("file")) {
-            ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FILE);
-            String todo_filepath = {};
-            Deck *deck = get_active_deck();
-            if (deck) todo_filepath = buf_get_str(deck->path, tm);
-            Bool have_file = fs_is_file(todo_filepath);
-            if (file_button->signals.clicked && have_file) win_open_file_url(todo_filepath);
-            if (file_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Open todo file")); }
+            UiBox *sort_button = ui_button(str("sort")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SORT_ASC);
+                if (sort_button->signals.clicked) push_command(.tag=CMD_VIEW_SORT);
+                if (sort_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Sort tasks")); }
+            }
+
+            UiBox *tracker_button = ui_button(str("tracker")) {
+                UiBox *icon = ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TIME_TRACKER);
+                if (context->tracked_task_idx != ARRAY_NIL_IDX) ui_style_box_vec4(icon, UI_TEXT_COLOR, ui->theme->text_color_red);
+                if (tracker_button->signals.clicked) push_command(.tag=CMD_VIEW_TIME_TRACKER, .idx=ARRAY_NIL_IDX);
+                if (tracker_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Time tracker")); }
+            }
+
+            UiBox *file_button = ui_button(str("file")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FILE);
+                String todo_filepath = {};
+                Deck *deck = get_active_deck();
+                if (deck) todo_filepath = buf_get_str(deck->path, tm);
+                Bool have_file = fs_is_file(todo_filepath);
+                if (file_button->signals.clicked && have_file) win_open_file_url(todo_filepath);
+                if (file_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Open todo file")); }
+            }
         }
     }
 
@@ -1936,57 +2142,10 @@ static Void build_view_kanban () {
         ui_style_f32(UI_SPACING, ui->theme->spacing);
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        if (! view->has_filters) ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
 
-        ui_box(0, "cards") {
-            ui_style_f32(UI_SPACING, ui->theme->spacing);
-            ui_style_vec2(UI_PADDING, ui->theme->padding);
-
-            array_iter (column, &view->columns) {
-                ui_box_fmt(0, "column%lu", ARRAY_IDX) {
-                    ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-                    ui_style_f32(UI_SPACING, ui->theme->spacing);
-
-                    if (column->with_header) {
-                        UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
-                            ui_tag("card");
-                            ui_style_rule(".card") ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
-                            ui_style_vec2(UI_PADDING, ui->theme->padding);
-
-                            ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size, false);
-                            ui_hspacer();
-
-                            if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
-                                ui_box(0, "autohide_icons") {
-                                    UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
-                                        ui_tag("button");
-                                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
-                                        search_button->next_style.size.width.strictness = 1;
-                                        if (search_button->signals.clicked) {
-                                            AString filter = astr_new(context->view_mem);
-                                            array_iter (c, &view->columns) {
-                                                if (c == column) break;
-                                                astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
-                                            }
-                                            astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
-                                            push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    array_iter (task, &column->tasks) {
-                        if (ARRAY_IDX == column->show_more_idx) break;
-                        Bool deleted = false;
-                        build_task(task, &deleted);
-                        if (deleted) push_command(.tag=CMD_VIEW_KANBAN); // To recompute the cached columns.
-                    }
-
-                    app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
-                }
-            }
+        switch (context->main_view_type) {
+        case MAIN_VIEW_SPARSE: build_view_main_sparse(); break;
+        case MAIN_VIEW_COMPACT: build_view_main_compact(); break;
         }
     }
 }
@@ -2007,7 +2166,7 @@ String todo_view_get_title (UiViewInstance *, Bool visible) {
 
 static Void destroy_current_view () {
     switch (context->view.tag) {
-    case VIEW_KANBAN: break;
+    case VIEW_MAIN: break;
     case VIEW_EDITOR: break;
     case VIEW_SORT: break;
     case VIEW_SEARCH: break;
@@ -2180,11 +2339,11 @@ static Void execute_commands () {
             if (! cmd->skip_config_save) save_config(true);
         } break;
 
-        case CMD_VIEW_KANBAN: {
+        case CMD_VIEW_MAIN: {
             destroy_current_view();
-            context->view.tag = VIEW_KANBAN;
+            context->view.tag = VIEW_MAIN;
 
-            Auto view = &context->view.kanban;
+            Auto view = &context->view.main;
 
             array_init(&view->columns, context->view_mem);
             array_init(&view->filters, context->view_mem);
@@ -2332,13 +2491,13 @@ Void todo_view_build (UiViewInstance *, Bool visible) {
     execute_commands();
     if (context->config_mem_fragmentation > 100) {
         load_config();
-        push_command(.tag=CMD_VIEW_KANBAN);
+        push_command(.tag=CMD_VIEW_MAIN);
         execute_commands();
     }
     if (context->tick_id) tic();
 
     switch (context->view.tag) {
-    case VIEW_KANBAN: build_view_kanban(); break;
+    case VIEW_MAIN: build_view_main(); break;
     case VIEW_EDITOR: build_view_editor(); break;
     case VIEW_SEARCH: build_view_search(); break;
     case VIEW_SORT: build_view_sort(); break;
@@ -2351,7 +2510,7 @@ Void todo_init () {
     if (context) return;
 
     context = mem_new(mem_root, Context);
-    context->config_version = 1;
+    context->config_version = 2;
     context->tracked_task_idx = ARRAY_NIL_IDX;
     context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
     context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
@@ -2366,5 +2525,5 @@ Void todo_init () {
     }
 
     load_config();
-    push_command(.tag=CMD_VIEW_KANBAN);
+    push_command(.tag=CMD_VIEW_MAIN);
 }

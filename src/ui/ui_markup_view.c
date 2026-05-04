@@ -486,7 +486,7 @@ static Void free_markup_view (Void *info_) {
 }
 
 UiBox *ui_markup_view_buf (String id, Buf *buf, Bool build_ast_to_box, String *out_clicked_tag, MarkupBuilder builder) {
-    UiBox *container = ui_scroll_box(id, true) {
+    UiBox *container = ui_box_str(0, id) {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_CHILDREN_SUM, 1, 1});
 

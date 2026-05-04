@@ -1,6 +1,7 @@
-version = 1
+version = 2
 editor_width = 300.0
 editor_height = 150.0
+view_type = 0
 time_tracker_file = ""
 sort = [
     {

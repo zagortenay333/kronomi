@@ -160,6 +160,7 @@ static Void compute_visual_lines (UiTextView *info, F32 max_width) {
             F32 remaining = max_width - line.width;
             array_iter (g, &token) {
                 if (remaining < g.glyph->x_advance) {
+                    if (line.width == 0) goto done;
                     glyph_idx -= (token.count - ARRAY_IDX);
                     break;
                 }
@@ -174,7 +175,7 @@ static Void compute_visual_lines (UiTextView *info, F32 max_width) {
         }
 
         token.count = 0;
-    }
+    } done:;
 
     if (line.glyphs.count) push_line();
     #undef push_line
