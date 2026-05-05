@@ -320,7 +320,7 @@ Void dr_line (Vec2 a, Vec2 b, Vec4 color, F32 softness, F32 thickness) {
 
     attr.color  = color;
     attr.color2 = vec4(-1, 0, 0, 0);
-    attr.edge_softness  = softness;
+    attr.edge_softness = softness;
 
     attr.text_color.x = a.x;
     attr.text_color.y = win_height - a.y;
@@ -334,7 +334,7 @@ Void dr_line (Vec2 a, Vec2 b, Vec4 color, F32 softness, F32 thickness) {
 }
 
 Void dr_triangle (Vec2 a, Vec2 b, Vec2 c, Vec4 color, F32 softness) {
-    RectAttributes attr = {0};
+    RectAttributes attr = {};
 
     attr.top_left     = vec2(min(a.x, min(b.x, c.x)), min(a.y, min(b.y, c.y)));
     attr.bottom_right = vec2(max(a.x, max(b.x, c.x)), max(a.y, max(b.y, c.y)));
