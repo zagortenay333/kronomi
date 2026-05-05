@@ -333,6 +333,28 @@ Void dr_line (Vec2 a, Vec2 b, Vec4 color, F32 softness, F32 thickness) {
     dr_rect_fn(&attr);
 }
 
+Void dr_triangle (Vec2 a, Vec2 b, Vec2 c, Vec4 color, F32 softness) {
+    RectAttributes attr = {0};
+
+    attr.top_left     = vec2(min(a.x, min(b.x, c.x)), min(a.y, min(b.y, c.y)));
+    attr.bottom_right = vec2(max(a.x, max(b.x, c.x)), max(a.y, max(b.y, c.y)));
+
+    attr.color  = color;
+    attr.color2 = vec4(-1, 0, 0, 0);
+    attr.edge_softness = softness;
+
+    attr.text_color.x = a.x;
+    attr.text_color.y = win_height - a.y;
+    attr.text_color.z = b.x;
+    attr.text_color.w = win_height - b.y;
+    attr.radius.x     = c.x;
+    attr.radius.y     = win_height - c.y;
+
+    attr.text_is_grayscale = -2;
+
+    dr_rect_fn(&attr);
+}
+
 Void dr_blur (Rect r, F32 strength, Vec4 corner_radius) {
     dr_flush_vertices();
     glScissor(0, 0, win_width, win_height);

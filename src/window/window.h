@@ -218,6 +218,7 @@ Vertex     *dr_reserve_vertices (U32 n);
 SliceVertex dr_rect_fn          (RectAttributes *);
 Void        dr_blur             (Rect, F32 strength, Vec4 corner_radius);
 Void        dr_line             (Vec2 a, Vec2 b, Vec4 color, F32 softness, F32 thickness);
+Void        dr_triangle         (Vec2 a, Vec2 b, Vec2 c, Vec4 color, F32 softness);
 Void        dr_scissor          (Rect);
 Texture     dr_image            (CString filepath, Bool flip);
 Void        dr_bind_texture     (Texture *);
