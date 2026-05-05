@@ -20,6 +20,12 @@ Vec3 normalize_v3 (Vec3 v)                { return mul(1.f/len(v), v); }
 Vec3 lerp_v3      (Vec3 a, Vec3 b, F32 t) { return vec3(lerp_f32(a.x, b.x, t), lerp_f32(a.y, b.y, t), lerp_f32(a.z, b.z, t)); }
 Void print_v3     (Vec3 v, AString *a, CString p, CString s) { astr_push_fmt(a, "%s(x=%f, y=%f, z=%f)%s", p, v.x, v.y, v.z, s); }
 
+Vec2 add_v2       (Vec2 a, Vec2 b)        { return vec2(a.x+b.x, a.y+b.y); }
+Vec2 sub_v2       (Vec2 a, Vec2 b)        { return vec2(a.x-b.x, a.y-b.y); }
+Vec2 mul_f32_v2   (F32 s, Vec2 v)         { return vec2(v.x*s, v.y*s); }
+F32  len_v2       (Vec2 v)                { return sqrt(v.x*v.x + v.y*v.y); }
+Vec2 normalize_v2 (Vec2 v)                { return mul(1.f/len(v), v); }
+
 Vec4 lerp_v4      (Vec4 a, Vec4 b, F32 t) { return vec4(lerp_f32(a.x, b.x, t), lerp_f32(a.y, b.y, t), lerp_f32(a.z, b.z, t), lerp_f32(a.w, b.w, t)); }
 
 // =============================================================================

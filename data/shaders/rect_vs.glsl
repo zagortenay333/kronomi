@@ -29,6 +29,8 @@ flat out float inset_shadow_width;
 flat out vec2 shadow_offsets;
 flat out vec2 center;
 flat out vec2 half_size;
+flat out vec2 top_left;
+flat out vec2 bottom_right;
 flat out vec4 text_color;
 flat out float text_is_grayscale;
 out vec2 uv;
@@ -49,6 +51,8 @@ void main () {
     shadow_offsets      = v_shadow_offsets;
     center              = (v_top_left + v_bottom_right) * 0.5;
     half_size           = abs(v_top_left - v_bottom_right) * 0.5 - 2*v_outset_shadow_width - 2*v_edge_softness;
+    top_left            = v_top_left;
+    bottom_right        = v_bottom_right;
     text_color          = v_text_color;
     text_is_grayscale   = v_text_is_grayscale;
     uv                  = v_uv;

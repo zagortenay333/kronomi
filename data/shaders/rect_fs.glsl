@@ -15,6 +15,7 @@ flat in vec2 shadow_offsets;
 flat in vec2 center;
 flat in vec2 half_size;
 flat in vec2 top_left;
+flat in vec2 bottom_right;
 flat in vec4 text_color;
 flat in float text_is_grayscale;
 in vec2 uv;
@@ -79,7 +80,7 @@ float select_border_width (vec2 p, vec2 half_size, vec4 borders) {
     return 0;
 }
 
-void main () {
+void draw_rect () {
     frag_color = color;
     vec2 frag_pos = gl_FragCoord.xy;
 
@@ -118,4 +119,32 @@ void main () {
     }
 
     frag_color.rgb *= frag_color.a;
+}
+
+float line_sdf (vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a, ba = b - a;
+    float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * t);
+}
+
+void draw_line() {
+    frag_color = color;
+    vec2 frag_pos = gl_FragCoord.xy;
+    vec2 a = text_color.xy;
+    vec2 b = text_color.zw;
+    float half_thickness = radius.x;
+
+    float dist_outer = line_sdf(frag_pos, a, b) - half_thickness;
+    float dist_outer_smooth = 1.0 - smoothstep(0.0, edge_softness, dist_outer);
+    frag_color.a *= dist_outer_smooth;
+
+    frag_color.rgb *= frag_color.a;
+}
+
+void main () {
+    if (text_is_grayscale == -1) {
+        draw_line();
+    } else {
+        draw_rect();
+    }
 }

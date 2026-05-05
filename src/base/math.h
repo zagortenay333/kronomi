@@ -55,6 +55,12 @@ Vec3 normalize_v3 (Vec3);
 Void print_v3     (Vec3, AString *, CString prefix, CString suffix);
 Vec3 lerp_v3      (Vec3, Vec3, F32);
 
+Vec2 add_v2       (Vec2, Vec2);
+Vec2 sub_v2       (Vec2, Vec2);
+F32  len_v2       (Vec2);
+Vec2 mul_f32_v2   (F32, Vec2);
+Vec2 normalize_v2 (Vec2);
+
 Vec4 lerp_v4      (Vec4, Vec4, F32);
 
 // =============================================================================
@@ -81,14 +87,15 @@ Void print_m4        (Mat4, AString *, CString prefix, CString suffix);
 #define mul(a, b) typematch2(a, b,\
     Void(*)(Mat4, Mat4): mul_m4,\
     Void(*)(Vec3, Vec3): mul_v3_v3,\
-    Void(*)(F32,  Vec3): mul_f32_v3\
+    Void(*)(F32,  Vec3): mul_f32_v3,\
+    Void(*)(F32,  Vec2): mul_f32_v2\
 )(a, b)
 
-#define add(a, b)         typematch(a, Vec3:add_v3)(a, b)
-#define sub(a, b)         typematch(a, Vec3:sub_v3)(a, b)
+#define add(a, b)         typematch(a, Vec2:add_v2, Vec3:add_v3)(a, b)
+#define sub(a, b)         typematch(a, Vec2:sub_v2, Vec3:sub_v3)(a, b)
 #define dot(a, b)         typematch(a, Vec3:dot_v3)(a, b)
-#define len(a)            typematch(a, Vec3:len_v3)(a)
-#define normalize(a)      typematch(a, Vec3:normalize_v3)(a)
+#define len(a)            typematch(a, Vec2:len_v2, Vec3:len_v3)(a)
+#define normalize(a)      typematch(a, Vec2:normalize_v2, Vec3:normalize_v3)(a)
 #define lerp(a, b, t)     typematch(a, Vec3:lerp_v3, Vec4:lerp_v4)(a, b, t)
 #define mat_print(v, a)   typematch(v, Mat4:print_m4)(v, a, #v":\n", "")
 #define mat_println(v, a) typematch(v, Mat4:print_m4)(v, a, #v":\n", "")

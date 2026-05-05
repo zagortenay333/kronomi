@@ -304,6 +304,35 @@ SliceVertex dr_rect_fn (RectAttributes *a) {
     return (SliceVertex){p,6};
 }
 
+Void dr_line (Vec2 a, Vec2 b, Vec4 color, F32 softness, F32 thickness) {
+    RectAttributes attr = {0};
+
+    F32 half = thickness * 0.5f;
+    F32 pad = half + softness;
+
+    F32 min_x = min(a.x, b.x);
+    F32 min_y = min(a.y, b.y);
+    F32 max_x = max(a.x, b.x);
+    F32 max_y = max(a.y, b.y);
+
+    attr.top_left = vec2(min_x - pad, min_y - pad);
+    attr.bottom_right = vec2(max_x + pad, max_y + pad);
+
+    attr.color  = color;
+    attr.color2 = vec4(-1, 0, 0, 0);
+    attr.edge_softness  = softness;
+
+    attr.text_color.x = a.x;
+    attr.text_color.y = win_height - a.y;
+    attr.text_color.z = b.x;
+    attr.text_color.w = win_height - b.y;
+
+    attr.radius.x = half;
+    attr.text_is_grayscale = -1;
+
+    dr_rect_fn(&attr);
+}
+
 Void dr_blur (Rect r, F32 strength, Vec4 corner_radius) {
     dr_flush_vertices();
     glScissor(0, 0, win_width, win_height);
