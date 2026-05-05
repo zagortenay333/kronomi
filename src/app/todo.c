@@ -390,9 +390,7 @@ static Void add_task (String text, MarkupAst *ast) {
     array_push(&context->tasks, task);
 }
 
-static Void add_tasks (String text, Bool copy_text) {
-    if (copy_text) text = str_copy(context->config_mem, text);
-
+static Void add_tasks (String text) {
     MarkupAst *root = markup_parse(context->config_mem, text);
 
     array_iter (node, &root->children) {
@@ -497,7 +495,7 @@ static Void load_active_deck () {
 
     tmem_new(tm);
     String file = fs_read_entire_file(context->config_mem, buf_get_str(deck->path, tm), 0);
-    add_tasks(file, false);
+    add_tasks(file);
 }
 
 static Void save_time_tracker_data () {
@@ -1074,6 +1072,7 @@ static Void build_view_editor () {
                     ui_label(UI_BOX_CLICK_THROUGH, "label", str("Ok"));
                     if (ok_button->signals.clicked) {
                         if (view->task_to_edit) push_command(.tag=CMD_DEL_TASK, .task=view->task_to_edit, .skip_config_save=true);
+                        if (! buf_ends_with_newline(view->buf)) buf_insert(view->buf, buf_get_count(view->buf), str("\n"));
                         String str = buf_get_str(view->buf, context->config_mem);
                         push_command(.tag=CMD_ADD_TASKS, .str=str);
                         push_command(.tag=CMD_VIEW_MAIN);
@@ -2183,7 +2182,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_ADD_TASKS: {
-            add_tasks(cmd->str, false);
+            add_tasks(cmd->str);
             sort_tasks();
             if (! cmd->skip_config_save) save_config(true);
         } break;
