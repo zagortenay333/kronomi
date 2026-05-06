@@ -552,7 +552,7 @@ static Void execute_commands () {
 
             String l = time_to_str(tm, sw->lap);
             String t = time_to_str(tm, sw->current);
-            String s = astr_fmt(tm, "|\\#%lu\n|%.*s\n|%.*s\n|-\n", ARRAY_IDX+1, STR(l), STR(t));
+            String s = astr_fmt(tm, "|\\#%lu\n|%.*s\n|%.*s\n|-\n", sw->laps.count + 1, STR(l), STR(t));
             buf_insert(sw->lap_buf, buf_get_count(sw->lap_buf), s);
 
             array_insert_lit(&sw->laps, 0, .lap=sw->lap, .total=sw->current);
