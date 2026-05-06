@@ -45,7 +45,7 @@ istruct (View) {
             Buf *sound_buf;
             Pomodoro pomo;
             U64 editor_cursor;
-            U64 pomodoro_idx;
+            Pomodoro *pomo_to_edit;
         } editor;
 
         struct {
@@ -71,8 +71,8 @@ ienum (CommandTag, U8) {
 istruct (Command) {
     CommandTag tag;
     Bool skip_config_save;
-    U64 idx;
-    Pomodoro pomo;
+    U64 index;
+    Pomodoro *pomo;
 };
 
 istruct (Context) {
@@ -83,7 +83,7 @@ istruct (Context) {
     Array(Command) commands;
     Mem *config_mem;
     U64 config_mem_fragmentation;
-    Array(Pomodoro) pomodoros;
+    Array(Pomodoro*) pomodoros;
     F32 editor_width;
     F32 editor_height;
     TickId tick_id;
@@ -95,16 +95,14 @@ static Context *context;
 
 #define push_command(...) array_push_lit(&context->commands, __VA_ARGS__)
 
-static Void destroy_sound (U64 idx) {
-    Pomodoro *pomo = array_ref(&context->pomodoros, idx);
+static Void destroy_sound (Pomodoro *pomo) {
     if (! pomo->sound_id) return;
     win_sound_cancel(pomo->sound_id);
     mem_free(mem_root, .old_ptr=pomo->sound_id);
     pomo->sound_id = 0;
 }
 
-static Void play_sound (U64 idx) {
-    Pomodoro *pomo = array_ref(&context->pomodoros, idx);
+static Void play_sound (Pomodoro *pomo) {
     if (pomo->sound_id) return;
     if (! pomo->sound_file.count) return;
     pomo->sound_id = win_sound_play(mem_root, pomo->sound_file, false);
@@ -118,7 +116,7 @@ static Void save_config () {
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
     astr_push_cstr(&astr, "pomodoros = [\n");
-    array_iter (pomo, &context->pomodoros, *) {
+    array_iter (pomo, &context->pomodoros) {
         astr_push_cstr(&astr, "    {\n");
         astr_push_fmt(&astr,  "        clock_size = %f\n", pomo->clock_size);
         astr_push_fmt(&astr,  "        message = \"%.*s\"\n", STR(pomo->message));
@@ -160,27 +158,25 @@ static Void load_config () {
 
     ConfigAst *pomos = config_get_array(cfg, cfg->root, "pomodoros");
     array_iter (pomo_ast, &pomos->children) {
-        Pomodoro *pomo = array_push_slot(&context->pomodoros);
-        *pomo = (Pomodoro){
-            .clock_size               = config_get_f64(cfg, pomo_ast, "clock_size"),
-            .message                  = config_get_string(cfg, pomo_ast, "message", context->config_mem),
-            .sound_file               = config_get_string(cfg, pomo_ast, "sound_file", context->config_mem),
-            .work_length              = config_get_u64(cfg, pomo_ast, "work_length"),
-            .short_break_length       = config_get_u64(cfg, pomo_ast, "short_break_length"),
-            .long_break_length        = config_get_u64(cfg, pomo_ast, "long_break_length"),
-            .long_break_every_n_pomos = config_get_u64(cfg, pomo_ast, "long_break_every_n_pomos"),
-            .n_completed_pomos        = config_get_u64(cfg, pomo_ast, "n_completed_pomos"),
-            .pomos_until_long_break   = config_get_u64(cfg, pomo_ast, "pomos_until_long_break"),
-        };
+        Pomodoro *pomo = mem_new(context->config_mem, Pomodoro);
+        pomo->clock_size               = config_get_f64(cfg, pomo_ast, "clock_size");
+        pomo->message                  = config_get_string(cfg, pomo_ast, "message", context->config_mem);
+        pomo->sound_file               = config_get_string(cfg, pomo_ast, "sound_file", context->config_mem);
+        pomo->work_length              = config_get_u64(cfg, pomo_ast, "work_length");
+        pomo->short_break_length       = config_get_u64(cfg, pomo_ast, "short_break_length");
+        pomo->long_break_length        = config_get_u64(cfg, pomo_ast, "long_break_length");
+        pomo->long_break_every_n_pomos = config_get_u64(cfg, pomo_ast, "long_break_every_n_pomos");
+        pomo->n_completed_pomos        = config_get_u64(cfg, pomo_ast, "n_completed_pomos");
+        pomo->pomos_until_long_break   = config_get_u64(cfg, pomo_ast, "pomos_until_long_break");
+        array_push(&context->pomodoros, pomo);
     }
 }
 
-static Void build_pomo (U64 idx, Bool *out_card_deleted) {
+static Void build_pomo (Pomodoro *pomo, Bool *out_card_deleted) {
     tmem_new(tm);
 
-    Pomodoro *pomo = array_ref(&context->pomodoros, idx);
-
-    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", idx) {
+    U64 n = array_get_last(&ui->box_stack)->children.count;
+    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", n) {
         ui_tag("card");
         ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
 
@@ -211,14 +207,14 @@ static Void build_pomo (U64 idx, Bool *out_card_deleted) {
                     UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=idx);
+                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .pomo=pomo);
                     }
 
                     UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
                         if (delete_button->signals.clicked) {
-                            push_command(.tag=CMD_DEL, .idx=idx);
+                            push_command(.tag=CMD_DEL, .pomo=pomo);
                             if (out_card_deleted) *out_card_deleted = true;
                         }
                     }
@@ -232,13 +228,13 @@ static Void build_pomo (U64 idx, Bool *out_card_deleted) {
                     UiBox *pause_button = ui_button(str("pause")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Pause"));
-                        if (pause_button->signals.clicked) push_command(.tag=CMD_PAUSE, .idx=idx);
+                        if (pause_button->signals.clicked) push_command(.tag=CMD_PAUSE, .pomo=pomo);
                     }
                 } else {
                     UiBox *start_button = ui_button(str("start")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Start"));
-                        if (start_button->signals.clicked) push_command(.tag=CMD_START, .idx=idx);
+                        if (start_button->signals.clicked) push_command(.tag=CMD_START, .pomo=pomo);
                     }
                 }
             }
@@ -303,8 +299,7 @@ static Void build_view_search () {
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Apply"));
                 if (apply_button->signals.clicked) {
                     if (view->delete_searched) {
-                        array_sort_cmp(&view->searched, app_cmp_search_results_on_idx);
-                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .idx=it.idx, .skip_config_save=true);
+                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .pomo=array_get(&context->pomodoros, it.idx), .skip_config_save=true);
                         view->searched.count = 0;
                         push_command(.tag=CMD_SAVE_CONFIG);
                     }
@@ -328,7 +323,7 @@ static Void build_view_search () {
             tmem_new(tm);
             String needle = buf_get_str(view->buf, tm);
 
-            array_iter (pomo, &context->pomodoros, *) {
+            array_iter (pomo, &context->pomodoros) {
                 I64 score = str_fuzzy_search(needle, pomo->message, 0);
                 if (score != INT64_MIN) array_push_lit(&view->searched, .score=score, .idx=ARRAY_IDX);
             }
@@ -337,7 +332,7 @@ static Void build_view_search () {
         }
 
         Bool deleted = false;
-        array_iter (card, &view->searched, *) build_pomo(card->idx, &deleted);
+        array_iter (it, &view->searched) build_pomo(array_get(&context->pomodoros, it.idx), &deleted);
         if (deleted) view->buf_version--; // To refresh the searched array.
     }
 }
@@ -485,8 +480,10 @@ static Void build_view_editor () {
                 if (ok_button->signals.clicked) {
                     view->pomo.message = buf_get_str(view->buf, context->config_mem);
                     view->pomo.sound_file = buf_get_str(view->sound_buf, context->config_mem);
-                    if (view->pomodoro_idx != ARRAY_NIL_IDX) push_command(.tag=CMD_DEL, .idx=view->pomodoro_idx, .skip_config_save=true);
-                    push_command(.tag=CMD_ADD, .pomo=view->pomo);
+                    if (view->pomo_to_edit) push_command(.tag=CMD_DEL, .pomo=view->pomo_to_edit, .skip_config_save=true);
+                    Pomodoro *new_pomo = mem_new(context->config_mem, Pomodoro);
+                    *new_pomo = view->pomo;
+                    push_command(.tag=CMD_ADD, .pomo=new_pomo);
                     push_command(.tag=CMD_VIEW_MAIN);
                 }
             }
@@ -545,7 +542,7 @@ static Void build_view_main () {
 
         UiBox *add_button = ui_button(str("add")) {
             ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
-            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=ARRAY_NIL_IDX);
+            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR);
             if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add pomodoro")); }
         }
 
@@ -563,7 +560,7 @@ static Void build_view_main () {
         ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        array_iter (_, &context->pomodoros, *) { _; build_pomo(ARRAY_IDX, 0); }
+        array_iter (pomo, &context->pomodoros) build_pomo(pomo, 0);
     }
 }
 
@@ -605,26 +602,24 @@ static Void execute_commands () {
         } break;
 
         case CMD_DEL: {
-            destroy_sound(cmd->idx);
-            array_remove(&context->pomodoros, cmd->idx);
+            destroy_sound(cmd->pomo);
+            array_find_remove(&context->pomodoros, IT == cmd->pomo);
             context->config_mem_fragmentation++;
             if (! cmd->skip_config_save) save_config();
         } break;
 
         case CMD_START: {
-            Pomodoro *pomo = array_ref(&context->pomodoros, cmd->idx);
-            assert_dbg(! pomo->running);
-            pomo->running = true;
-            pomo->start = os_get_time_ms();
+            assert_dbg(! cmd->pomo->running);
+            cmd->pomo->running = true;
+            cmd->pomo->start = os_get_time_ms();
             if (context->n_running == 0) context->tick_id = win_tick_start(1000);
             context->n_running++;
         } break;
 
         case CMD_PAUSE: {
-            Pomodoro *pomo = array_ref(&context->pomodoros, cmd->idx);
-            assert_dbg(pomo->running);
-            destroy_sound(cmd->idx);
-            pomo->running = false;
+            assert_dbg(cmd->pomo->running);
+            destroy_sound(cmd->pomo);
+            cmd->pomo->running = false;
             context->n_running--;
             if (context->n_running == 0) win_tick_end(context->tick_id);
         } break;
@@ -644,9 +639,9 @@ static Void execute_commands () {
         case CMD_VIEW_EDITOR: {
             destroy_current_view();
             context->view.tag = VIEW_EDITOR;
-            Pomodoro *pomo = (cmd->idx != ARRAY_NIL_IDX) ? array_ref(&context->pomodoros, cmd->idx) : 0;
-            context->view.editor.pomodoro_idx = cmd->idx;
-            if (pomo) destroy_sound(cmd->idx);
+            Pomodoro *pomo = cmd->pomo;
+            context->view.editor.pomo_to_edit = pomo;
+            if (pomo) destroy_sound(pomo);
             context->view.editor.buf = buf_new(context->view_mem, pomo ? pomo->message : str(""));
             context->view.editor.sound_buf = buf_new(context->view_mem, pomo ? pomo->sound_file : str(""));
             if (pomo) context->view.editor.pomo = *pomo;
@@ -665,7 +660,7 @@ Void pomodoro_view_build (UiViewInstance *, Bool visible) {
         execute_commands();
     }
 
-    array_iter (pomo, &context->pomodoros, *) {
+    array_iter (pomo, &context->pomodoros) {
         if (! pomo->running) continue;
 
         U64 now = os_get_time_ms();
@@ -688,12 +683,11 @@ Void pomodoro_view_build (UiViewInstance *, Bool visible) {
                 pomo->pomos_until_long_break = sat_sub64(pomo->pomos_until_long_break, 1);
             }
 
-            destroy_sound(ARRAY_IDX);
-            play_sound(ARRAY_IDX);
+            destroy_sound(pomo);
+            play_sound(pomo);
 
-            Pomodoro p = *pomo;
-            array_remove(&context->pomodoros, ARRAY_IDX);
-            array_insert(&context->pomodoros, p, 0);
+            array_find_remove(&context->pomodoros, IT == pomo);
+            array_insert(&context->pomodoros, pomo, 0);
         }
     }
 
