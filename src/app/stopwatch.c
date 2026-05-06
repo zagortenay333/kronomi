@@ -43,7 +43,7 @@ istruct (View) {
             Buf *buf;
             F32 clock_size;
             U64 editor_cursor;
-            U64 stopwatch_idx;
+            Stopwatch *stopwatch_to_edit;
         } editor;
 
         struct {
@@ -72,7 +72,8 @@ ienum (CommandTag, U8) {
 istruct (Command) {
     CommandTag tag;
     Bool skip_config_save;
-    U64 idx;
+    U64 index;
+    Stopwatch *stopwatch;
     F32 clock_size;
     String text;
 };
@@ -85,7 +86,7 @@ istruct (Context) {
     Array(Command) commands;
     Mem *config_mem;
     U64 config_mem_fragmentation;
-    Array(Stopwatch) stopwatches;
+    Array(Stopwatch*) stopwatches;
     F32 editor_width;
     F32 editor_height;
     TickId tick_id;
@@ -112,7 +113,7 @@ static Void save_config () {
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
     astr_push_cstr(&astr, "stopwatches = [\n");
-    array_iter (stopwatch, &context->stopwatches, *) {
+    array_iter (stopwatch, &context->stopwatches) {
         astr_push_cstr(&astr, "    {\n");
         astr_push_fmt(&astr,  "        clock_size = %f\n", stopwatch->clock_size);
         astr_push_fmt(&astr,  "        message = \"%.*s\"\n", STR(stopwatch->message));
@@ -147,33 +148,32 @@ static Void load_config () {
 
     ConfigAst *stopwatches = config_get_array(cfg, cfg->root, "stopwatches");
     array_iter (stopwatch_ast, &stopwatches->children) {
-        Stopwatch *sw  = array_push_slot(&context->stopwatches);
-        *sw = (Stopwatch){};
+        Stopwatch *sw  = mem_new(context->config_mem, Stopwatch);
         sw->clock_size = config_get_f64(cfg, stopwatch_ast, "clock_size"),
         sw->message    = config_get_string(cfg, stopwatch_ast, "message", context->config_mem),
+        array_push(&context->stopwatches, sw);
         array_init(&sw->laps, context->config_mem);
     }
 }
 
-static Void build_stopwatch (U64 idx, Bool *out_card_deleted) {
+static Void build_stopwatch (Stopwatch *stopwatch, Bool *out_card_deleted) {
     tmem_new(tm);
 
-    Stopwatch *sw = array_ref(&context->stopwatches, idx);
-
-    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", idx) {
+    U64 n = array_get_last(&ui->box_stack)->children.count;
+    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", n) {
         ui_tag("card");
         ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
 
         ui_box(0, "header") {
-            if (sw->state == STOPWATCH_RUNNING) {
+            if (stopwatch->state == STOPWATCH_RUNNING) {
                 ui_style_vec4(UI_BG_COLOR, ui->theme->color_red);
             }
 
-            String label = time_to_str(tm, sw->current);
-            UiBox *clock = ui_label_extra(UI_BOX_REACTIVE, "clock", label, ui->config->font_path_normal, (sw->clock_size == 0.0) ? ui->config->font_size : sw->clock_size, false);
+            String label = time_to_str(tm, stopwatch->current);
+            UiBox *clock = ui_label_extra(UI_BOX_REACTIVE, "clock", label, ui->config->font_path_normal, (stopwatch->clock_size == 0.0) ? ui->config->font_size : stopwatch->clock_size, false);
             if (clock->signals.hovered && ui->event->tag == EVENT_SCROLL) {
-                sw->clock_size += 5 * ui->event->y;
-                sw->clock_size = clamp(sw->clock_size, 0, INFINITY);
+                stopwatch->clock_size += 5 * ui->event->y;
+                stopwatch->clock_size = clamp(stopwatch->clock_size, 0, INFINITY);
                 save_config();
             }
 
@@ -184,20 +184,20 @@ static Void build_stopwatch (U64 idx, Bool *out_card_deleted) {
                     UiBox *move_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "move") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_MOVE_TOP);
-                        if (move_button->signals.clicked) push_command(.tag=CMD_MOVE_TOP, .idx=idx);
+                        if (move_button->signals.clicked) push_command(.tag=CMD_MOVE_TOP, .stopwatch=stopwatch);
                     }
 
                     UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=idx);
+                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .stopwatch=stopwatch);
                     }
 
                     UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
                         if (delete_button->signals.clicked) {
-                            push_command(.tag=CMD_DEL, .idx=idx);
+                            push_command(.tag=CMD_DEL, .stopwatch=stopwatch);
                             if (out_card_deleted) *out_card_deleted = true;
                         }
                     }
@@ -207,13 +207,13 @@ static Void build_stopwatch (U64 idx, Bool *out_card_deleted) {
 
         ui_box(0, "body") {
             ui_button_group(str("buttons")) {
-                StopwatchState s = sw->state;
+                StopwatchState s = stopwatch->state;
 
                 if (s == STOPWATCH_RESET || s == STOPWATCH_PAUSED) {
                     UiBox *start_button = ui_button(str("start")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Start"));
-                        if (start_button->signals.clicked) push_command(.tag=CMD_START, .idx=idx);
+                        if (start_button->signals.clicked) push_command(.tag=CMD_START, .stopwatch=stopwatch);
                     }
                 }
 
@@ -221,13 +221,13 @@ static Void build_stopwatch (U64 idx, Bool *out_card_deleted) {
                     UiBox *pause_button = ui_button(str("pause")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Pause"));
-                        if (pause_button->signals.clicked) push_command(.tag=CMD_PAUSE, .idx=idx);
+                        if (pause_button->signals.clicked) push_command(.tag=CMD_PAUSE, .stopwatch=stopwatch);
                     }
 
                     UiBox *lap_button = ui_button(str("lap")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Lap"));
-                        if (lap_button->signals.clicked) push_command(.tag=CMD_LAP, .idx=idx);
+                        if (lap_button->signals.clicked) push_command(.tag=CMD_LAP, .stopwatch=stopwatch);
                     }
                 }
 
@@ -235,14 +235,14 @@ static Void build_stopwatch (U64 idx, Bool *out_card_deleted) {
                     UiBox *reset_button = ui_button(str("reset")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Reset"));
-                        if (reset_button->signals.clicked) push_command(.tag=CMD_RESET, .idx=idx);
+                        if (reset_button->signals.clicked) push_command(.tag=CMD_RESET, .stopwatch=stopwatch);
                     }
                 }
             }
 
-            if (sw->laps.count) ui_markup_view_buf(str("laps"), sw->lap_buf, false, 0, 0);
+            if (stopwatch->laps.count) ui_markup_view_buf(str("laps"), stopwatch->lap_buf, false, 0, 0);
 
-            ui_markup_view(str("message"), sw->message, 0);
+            ui_markup_view(str("message"), stopwatch->message, 0);
         }
     }
 }
@@ -278,7 +278,7 @@ static Void build_view_search () {
                 if (apply_button->signals.clicked) {
                     if (view->delete_searched) {
                         array_sort_cmp(&view->searched, app_cmp_search_results_on_idx);
-                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .idx=it.idx, .skip_config_save=true);
+                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .stopwatch=array_get(&context->stopwatches, it.idx), .skip_config_save=true);
                         view->searched.count = 0;
                         push_command(.tag=CMD_SAVE_CONFIG);
                     }
@@ -302,7 +302,7 @@ static Void build_view_search () {
             tmem_new(tm);
             String needle = buf_get_str(view->buf, tm);
 
-            array_iter (sw, &context->stopwatches, *) {
+            array_iter (sw, &context->stopwatches) {
                 I64 score = str_fuzzy_search(needle, sw->message, 0);
                 if (score != INT64_MIN) array_push_lit(&view->searched, .score=score, .idx=ARRAY_IDX);
             }
@@ -311,7 +311,7 @@ static Void build_view_search () {
         }
 
         Bool deleted = false;
-        array_iter (card, &view->searched, *) build_stopwatch(card->idx, &deleted);
+        array_iter (it, &view->searched) build_stopwatch(array_get(&context->stopwatches, it.idx), &deleted);
         if (deleted) view->buf_version--; // To refresh the searched array.
     }
 }
@@ -344,7 +344,7 @@ static Void build_view_editor () {
             }
 
             if (! view->buf) {
-                String text = (view->stopwatch_idx == ARRAY_NIL_IDX) ? str("") : array_ref(&context->stopwatches, view->stopwatch_idx)->message;
+                String text = view->stopwatch_to_edit ? view->stopwatch_to_edit->message : str("");
                 view->buf = buf_new(context->view_mem, text);
             }
 
@@ -360,7 +360,7 @@ static Void build_view_editor () {
                 ui_tag("row");
                 ui_label(0, "title", str("Clock size"));
                 ui_hspacer();
-                if (view->stopwatch_idx != ARRAY_NIL_IDX) view->clock_size = array_ref(&context->stopwatches, view->stopwatch_idx)->clock_size;
+                if (view->stopwatch_to_edit) view->clock_size = view->stopwatch_to_edit->clock_size;
                 F64 val = view->clock_size;
                 UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
                 picker->next_style.size.width.strictness = 1;
@@ -380,7 +380,7 @@ static Void build_view_editor () {
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Ok"));
                 if (ok_button->signals.clicked) {
                     String msg = buf_get_str(view->buf, context->config_mem);
-                    if (view->stopwatch_idx != ARRAY_NIL_IDX) push_command(.tag=CMD_DEL, .idx=view->stopwatch_idx, .skip_config_save=true);
+                    if (view->stopwatch_to_edit) push_command(.tag=CMD_DEL, .stopwatch=view->stopwatch_to_edit, .skip_config_save=true);
                     push_command(.tag=CMD_ADD, .clock_size=view->clock_size, .text=msg);
                     push_command(.tag=CMD_VIEW_MAIN);
                 }
@@ -440,7 +440,7 @@ static Void build_view_main () {
 
         UiBox *add_button = ui_button(str("add")) {
             ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
-            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=ARRAY_NIL_IDX);
+            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR);
             if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add stopwatch")); }
         }
 
@@ -458,7 +458,7 @@ static Void build_view_main () {
         ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        array_iter (_, &context->stopwatches, *) { _; build_stopwatch(ARRAY_IDX, 0); }
+        array_iter (sw, &context->stopwatches) build_stopwatch(sw, 0);
     }
 }
 
@@ -497,22 +497,22 @@ static Void execute_commands () {
         } break;
 
         case CMD_ADD: {
-            Stopwatch *sw  = array_push_slot(&context->stopwatches);
-            *sw = (Stopwatch){};
+            Stopwatch *sw  = mem_new(context->config_mem, Stopwatch);
             sw->clock_size = cmd.clock_size;
             sw->message    = cmd.text;
             array_init(&sw->laps, context->config_mem);
+            array_push(&context->stopwatches, sw);
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_DEL: {
-            array_remove(&context->stopwatches, cmd.idx);
+            array_find_remove(&context->stopwatches, IT == cmd.stopwatch);
             context->config_mem_fragmentation++;
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_START: {
-            Stopwatch *sw = array_ref(&context->stopwatches, cmd.idx);
+            Stopwatch *sw = cmd.stopwatch;
             assert_dbg(sw->state == STOPWATCH_PAUSED || sw->state == STOPWATCH_RESET);
             sw->state = STOPWATCH_RUNNING;
             sw->monotonic = os_get_time_ms();
@@ -521,7 +521,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_PAUSE: {
-            Stopwatch *sw = array_ref(&context->stopwatches, cmd.idx);
+            Stopwatch *sw = cmd.stopwatch;
             assert_dbg(sw->state == STOPWATCH_RUNNING);
             sw->state = STOPWATCH_PAUSED;
             assert_dbg(context->n_running);
@@ -530,7 +530,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_RESET: {
-            Stopwatch *sw = array_ref(&context->stopwatches, cmd.idx);
+            Stopwatch *sw = cmd.stopwatch;
             assert_dbg(sw->state == STOPWATCH_PAUSED);
             sw->state = STOPWATCH_RESET;
             sw->current = 0;
@@ -543,7 +543,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_LAP: {
-            Stopwatch *sw = array_ref(&context->stopwatches, cmd.idx);
+            Stopwatch *sw = cmd.stopwatch;
 
             if (! sw->lap_buf) {
                 String header = astr_fmt(tm, "|**%s**\n|**%s**\n|**%s**\n|-\n", "Position", "Lap", "Total");
@@ -561,9 +561,8 @@ static Void execute_commands () {
         } break;
 
         case CMD_MOVE_TOP: {
-            Stopwatch sw = array_get(&context->stopwatches, cmd.idx);
-            array_remove(&context->stopwatches, cmd.idx);
-            array_insert(&context->stopwatches, sw, 0);
+            array_find_remove(&context->stopwatches, IT == cmd.stopwatch);
+            array_insert(&context->stopwatches, cmd.stopwatch, 0);
             if (! cmd.skip_config_save) save_config();
         } break;
 
@@ -582,7 +581,7 @@ static Void execute_commands () {
         case CMD_VIEW_EDITOR: {
             destroy_current_view();
             context->view.tag = VIEW_EDITOR;
-            context->view.editor.stopwatch_idx = cmd.idx;
+            context->view.editor.stopwatch_to_edit = cmd.stopwatch;
         } break;
         }
     }
@@ -598,7 +597,7 @@ Void stopwatch_view_build (UiViewInstance *, Bool visible) {
         execute_commands();
     }
 
-    array_iter (sw, &context->stopwatches, *) {
+    array_iter (sw, &context->stopwatches) {
         if (sw->state != STOPWATCH_RUNNING) continue;
         U64 now = os_get_time_ms();
         sw->current += now - sw->monotonic;
