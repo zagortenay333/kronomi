@@ -2021,9 +2021,11 @@ UiBox *ui_drawer_push (String id, String title) {
     UiBox *container = ui_box_push_str(0, id);
     ui_style_box_u32(container, UI_AXIS, UI_AXIS_VERTICAL);
     Bool open = container->scratch;
+    F32 r = ui->theme->radius.x;
 
     UiBox *button = ui_button(str("button")) {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        if (open) ui_style_vec4(UI_RADIUS, vec4(r, r, 0, 0));
 
         if (button->signals.clicked) open = !open;
 
@@ -2033,7 +2035,6 @@ UiBox *ui_drawer_push (String id, String title) {
     }
 
     UiBox *content = ui_box_push_str(UI_BOX_CLIPPING, str("content"));
-    F32 r = ui->theme->radius.x;
     ui_style_box_vec4(content, UI_RADIUS, vec4(0, 0, r, r));
     ui_style_box_vec2(content, UI_PADDING, ui->theme->padding);
     ui_style_box_vec4(content, UI_BG_COLOR, ui->theme->bg_color_z1);
