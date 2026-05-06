@@ -20,7 +20,7 @@ istruct (Alarm) {
 
 istruct (SnoozedAlarm) {
     Minutes time;
-    U64 idx;
+    Alarm *alarm;
 };
 
 ienum (ViewTag, U8) {
@@ -37,7 +37,7 @@ istruct (View) {
             Buf *buf;
             Buf *sound_buf;
             U64 editor_cursor;
-            U64 alarm_idx;
+            Alarm *alarm_to_edit;
             Alarm alarm;
         } editor;
 
@@ -65,8 +65,8 @@ ienum (CommandTag, U8) {
 istruct (Command) {
     CommandTag tag;
     Bool skip_config_save;
-    U64 idx;
-    Alarm alarm;
+    U64 index;
+    Alarm *alarm;
 };
 
 istruct (Context) {
@@ -77,7 +77,7 @@ istruct (Context) {
     Array(Command) commands;
     Mem *config_mem;
     U64 config_mem_fragmentation;
-    Array(Alarm) alarms;
+    Array(Alarm*) alarms;
     Array(SnoozedAlarm) snoozed_alarms;
     F32 editor_width;
     F32 editor_height;
@@ -89,16 +89,14 @@ static Context *context;
 
 #define push_command(...) array_push_lit(&context->commands, __VA_ARGS__)
 
-static Void destroy_sound (U64 idx) {
-    Alarm *alarm = array_ref(&context->alarms, idx);
+static Void destroy_sound (Alarm *alarm) {
     if (! alarm->sound_id) return;
     win_sound_cancel(alarm->sound_id);
     mem_free(mem_root, .old_ptr=alarm->sound_id);
     alarm->sound_id = 0;
 }
 
-static Void play_sound (U64 idx) {
-    Alarm *alarm = array_ref(&context->alarms, idx);
+static Void play_sound (Alarm *alarm) {
     if (alarm->sound_id) return;
     if (! alarm->sound.count) return;
     alarm->sound_id = win_sound_play(mem_root, alarm->sound, true);
@@ -112,7 +110,7 @@ static Void save_config () {
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
     astr_push_cstr(&astr, "alarms = [\n");
-    array_iter (alarm, &context->alarms, *) {
+    array_iter (alarm, &context->alarms) {
         astr_push_cstr(&astr, "    {\n");
         astr_push_fmt(&astr,  "        message = \"%.*s\"\n", STR(alarm->message));
         astr_push_fmt(&astr,  "        sound = \"%.*s\"\n", STR(alarm->sound));
@@ -151,7 +149,7 @@ static Void load_config () {
 
     ConfigAst *alarms = config_get_array(cfg, cfg->root, "alarms");
     array_iter (alarm_ast, &alarms->children) {
-        Alarm *alarm    = array_push_slot(&context->alarms);
+        Alarm *alarm    = mem_new(context->config_mem, Alarm);
         alarm->message  = config_get_string(cfg, alarm_ast, "message", context->config_mem);
         alarm->sound    = config_get_string(cfg, alarm_ast, "sound", context->config_mem);
         alarm->time     = config_get_u64(cfg, alarm_ast, "time");
@@ -160,15 +158,15 @@ static Void load_config () {
         alarm->days     = config_get_u64(cfg, alarm_ast, "days");
         alarm->playing  = false;
         alarm->sound_id = 0;
+        array_push(&context->alarms, alarm);
     }
 }
 
-static Void build_alarm (U64 idx, Bool *out_card_deleted) {
+static Void build_alarm (Alarm *alarm, Bool *out_card_deleted) {
     tmem_new(tm);
 
-    Alarm *alarm = array_ref(&context->alarms, idx);
-
-    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", idx) {
+    U64 n = array_get_last(&ui->box_stack)->children.count;
+    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", n) {
         ui_tag("card");
 
         if (alarm->playing) {
@@ -186,14 +184,14 @@ static Void build_alarm (U64 idx, Bool *out_card_deleted) {
                     UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=idx);
+                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .alarm=alarm);
                     }
 
                     UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
                         if (delete_button->signals.clicked) {
-                            push_command(.tag=CMD_DEL, .idx=idx);
+                            push_command(.tag=CMD_DEL, .alarm=alarm);
                             if (out_card_deleted) *out_card_deleted = true;
                         }
                     }
@@ -209,13 +207,13 @@ static Void build_alarm (U64 idx, Bool *out_card_deleted) {
                     UiBox *dismiss_button = ui_button(str("dismiss")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Dismiss"));
-                        if (dismiss_button->signals.clicked) push_command(.tag=CMD_DISMISS, .idx=idx);
+                        if (dismiss_button->signals.clicked) push_command(.tag=CMD_DISMISS, .alarm=alarm);
                     }
 
                     UiBox *snooze_button = ui_button(str("snooze")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Snooze"));
-                        if (snooze_button->signals.clicked) push_command(.tag=CMD_SNOOZE, .idx=idx);
+                        if (snooze_button->signals.clicked) push_command(.tag=CMD_SNOOZE, .alarm=alarm);
                     }
                 }
             }
@@ -255,8 +253,7 @@ static Void build_view_search () {
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Apply"));
                 if (apply_button->signals.clicked) {
                     if (view->delete_searched) {
-                        array_sort_cmp(&view->searched, app_cmp_search_results_on_idx);
-                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .idx=it.idx, .skip_config_save=true);
+                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .alarm=array_get(&context->alarms, it.idx), .skip_config_save=true);
                         view->searched.count = 0;
                         push_command(.tag=CMD_SAVE_CONFIG);
                     }
@@ -280,7 +277,7 @@ static Void build_view_search () {
             tmem_new(tm);
             String needle = buf_get_str(view->buf, tm);
 
-            array_iter (alarm, &context->alarms, *) {
+            array_iter (alarm, &context->alarms) {
                 I64 score = str_fuzzy_search(needle, alarm->message, 0);
                 if (score != INT64_MIN) array_push_lit(&view->searched, .score=score, .idx=ARRAY_IDX);
             }
@@ -289,7 +286,7 @@ static Void build_view_search () {
         }
 
         Bool deleted = false;
-        array_iter (card, &view->searched, *) build_alarm(card->idx, &deleted);
+        array_iter (it, &view->searched) build_alarm(array_get(&context->alarms, it.idx), &deleted);
         if (deleted) view->buf_version--; // To refresh the searched array.
     }
 }
@@ -373,10 +370,12 @@ static Void build_view_editor () {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Ok"));
                 if (ok_button->signals.clicked) {
-                    if (view->alarm_idx != ARRAY_NIL_IDX) push_command(.tag=CMD_DEL, .idx=view->alarm_idx, .skip_config_save=true);
-                    view->alarm.message = buf_get_str(view->buf, context->config_mem),
-                    view->alarm.sound = buf_get_str(view->sound_buf, context->config_mem),
-                    push_command(.tag=CMD_ADD, .alarm=view->alarm);
+                    if (view->alarm_to_edit) push_command(.tag=CMD_DEL, .alarm=view->alarm_to_edit, .skip_config_save=true);
+                    Alarm *new_alarm = mem_new(context->config_mem, Alarm);
+                    *new_alarm = view->alarm;
+                    new_alarm->message = buf_get_str(view->buf, context->config_mem);
+                    new_alarm->sound = buf_get_str(view->sound_buf, context->config_mem);
+                    push_command(.tag=CMD_ADD, .alarm=new_alarm);
                     push_command(.tag=CMD_VIEW_MAIN);
                 }
             }
@@ -435,7 +434,7 @@ static Void build_view_main () {
 
         UiBox *add_button = ui_button(str("add")) {
             ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
-            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=ARRAY_NIL_IDX);
+            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR);
             if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add alarm")); }
         }
 
@@ -453,7 +452,7 @@ static Void build_view_main () {
         ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        array_iter (_, &context->alarms, *) { _; build_alarm(ARRAY_IDX, 0); }
+        array_iter (alarm, &context->alarms) build_alarm(alarm, 0);
     }
 }
 
@@ -495,35 +494,32 @@ static Void execute_commands () {
         } break;
 
         case CMD_DEL: {
-            destroy_sound(cmd->idx);
-            array_find_remove_fast(&context->snoozed_alarms, IT.idx == cmd->idx);
-            array_remove(&context->alarms, cmd->idx);
+            destroy_sound(cmd->alarm);
+            array_find_remove_fast(&context->snoozed_alarms, IT.alarm == cmd->alarm);
+            array_find_remove(&context->alarms, IT == cmd->alarm);
             context->config_mem_fragmentation++;
             if (! cmd->skip_config_save) save_config();
         } break;
 
         case CMD_TOGGLE: {
-            Alarm *alarm = array_ref(&context->alarms, cmd->idx);
-            alarm->enabled = !alarm->enabled;
+            cmd->alarm->enabled = !cmd->alarm->enabled;
             if (! cmd->skip_config_save) save_config();
         } break;
 
         case CMD_DISMISS: {
-            Alarm *alarm = array_ref(&context->alarms, cmd->idx);
-            alarm->playing = false;
-            destroy_sound(cmd->idx);
-            array_find_remove_fast(&context->snoozed_alarms, IT.idx == cmd->idx);
+            cmd->alarm->playing = false;
+            destroy_sound(cmd->alarm);
+            array_find_remove_fast(&context->snoozed_alarms, IT.alarm == cmd->alarm);
         } break;
 
         case CMD_SNOOZE: {
-            Alarm *alarm = array_ref(&context->alarms, cmd->idx);
-            alarm->playing = false;
-            destroy_sound(cmd->idx);
-            array_find_remove_fast(&context->snoozed_alarms, IT.idx == cmd->idx);
+            cmd->alarm->playing = false;
+            destroy_sound(cmd->alarm);
+            array_find_remove_fast(&context->snoozed_alarms, IT.alarm == cmd->alarm);
             Time time = os_get_wall_time();
             Minutes now = time.hours*60 + time.minutes;
-            Minutes then = (now + alarm->snooze) % (24 * 60);
-            array_push_lit(&context->snoozed_alarms, .time=then, .idx=cmd->idx);
+            Minutes then = (now + cmd->alarm->snooze) % (24 * 60);
+            array_push_lit(&context->snoozed_alarms, .time=then, .alarm=cmd->alarm);
         } break;
 
         case CMD_VIEW_MAIN: {
@@ -541,16 +537,16 @@ static Void execute_commands () {
         case CMD_VIEW_EDITOR: {
             destroy_current_view();
             context->view.tag = VIEW_EDITOR;
-            Alarm *alarm = (cmd->idx != ARRAY_NIL_IDX) ? array_ref(&context->alarms, cmd->idx) : 0;
+            Alarm *alarm = cmd->alarm;
             if (alarm) {
                 context->view.editor.alarm = *alarm;
-                destroy_sound(cmd->idx);
-                array_find_remove_fast(&context->snoozed_alarms, IT.idx == cmd->idx);
+                destroy_sound(alarm);
+                array_find_remove_fast(&context->snoozed_alarms, IT.alarm == alarm);
             } else {
                 context->view.editor.alarm.days = 255;
                 context->view.editor.alarm.enabled = true;
             }
-            context->view.editor.alarm_idx = cmd->idx;
+            context->view.editor.alarm_to_edit = alarm;
             context->view.editor.buf = buf_new(context->view_mem, alarm ? alarm->message : str(""));
             context->view.editor.sound_buf = buf_new(context->view_mem, alarm ? alarm->sound : str(""));
         } break;
@@ -572,25 +568,22 @@ static Void tick () {
         context->now = now;
     }
 
-    array_iter (alarm, &context->alarms, *) {
+    array_iter (alarm, &context->alarms) {
         if ((alarm->time == now) && alarm->enabled && (alarm->days & day_flag) && !alarm->playing) {
-            play_sound(ARRAY_IDX);
+            play_sound(alarm);
             alarm->playing = true;
-            Alarm a = *alarm;
-            array_remove(&context->alarms, ARRAY_IDX);
-            array_insert(&context->alarms, a, 0);
+            array_find_remove(&context->alarms, IT == alarm);
+            array_insert(&context->alarms, alarm, 0);
         }
     }
 
-    array_iter (alarm, &context->snoozed_alarms, *) {
-        if (alarm->time == now) {
-            play_sound(alarm->idx);
-            Alarm *a = array_ref(&context->alarms, alarm->idx);
-            a->playing = true;
+    array_iter (it, &context->snoozed_alarms, *) {
+        if (it->time == now) {
+            play_sound(it->alarm);
+            it->alarm->playing = true;
             array_remove_fast(&context->snoozed_alarms, ARRAY_IDX--);
-            Alarm av = *a;
-            array_remove(&context->alarms, alarm->idx);
-            array_insert(&context->alarms, av, 0);
+            array_find_remove(&context->alarms, IT == it->alarm);
+            array_insert(&context->alarms, it->alarm, 0);
         }
     }
 }
