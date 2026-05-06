@@ -546,13 +546,9 @@ static Void exam_view_get_next_card () {
 static Void build_view_exam () {
     Auto view = &context->view.exam;
 
-    ui_scroll_box(str("scrollbox"), true) {
-        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-        ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
-        ui_style_f32(UI_SPACING, ui->theme->spacing);
-        ui_style_vec2(UI_PADDING, ui->theme->padding);
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+    ui_scroll_box(str("left_box"), true) {
+        ui_tag("sidebar");
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_CHILDREN_SUM, 0, 1});
 
         ui_box(UI_BOX_INVISIBLE_BG, "rowgroup1") {
             ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
@@ -581,49 +577,54 @@ static Void build_view_exam () {
                 String label = astr_fmt(tm, "%lu%c", view->cards.count, 0);
                 ui_label(0, "remaining", label);
             }
+        }
 
-            ui_box(0, "buttons") {
-                ui_tag("row");
-                ui_button_group(str("buttons")) {
-                    UiBox *cancel_button = ui_button(str("cancel")) {
-                        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-                        ui_label(0, "label", str("Cancel"));
-                        if (cancel_button->signals.clicked) {
-                            context->session++;
-                            if (context->session > 32) context->session = 32;
-                            save_config();
-                            push_command(.tag=CMD_VIEW_MAIN);
-                        }
+        ui_button_group(str("buttons")) {
+            UiBox *cancel_button = ui_button(str("cancel")) {
+                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+                ui_label(0, "label", str("Cancel"));
+                if (cancel_button->signals.clicked) {
+                    context->session++;
+                    if (context->session > 32) context->session = 32;
+                    save_config();
+                    push_command(.tag=CMD_VIEW_MAIN);
+                }
+            }
+
+            if (! view->done) {
+                UiBox *correct_button = ui_button(str("correct")) {
+                    ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+                    UiBox *label = ui_label(0, "label", str("Correct"));
+                    ui_style_box_vec4(label, UI_TEXT_COLOR, ui->theme->text_color_green);
+                    if (correct_button->signals.clicked) {
+                        Card *card = view->shown_card;
+                        card->bucket++;
+                        if (card->bucket > 5) card->bucket = 5;
+                        exam_view_get_next_card();
                     }
+                }
 
-                    if (! view->done) {
-                        UiBox *correct_button = ui_button(str("correct")) {
-                            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-                            UiBox *label = ui_label(0, "label", str("Correct"));
-                            ui_style_box_vec4(label, UI_TEXT_COLOR, ui->theme->text_color_green);
-                            if (correct_button->signals.clicked) {
-                                Card *card = view->shown_card;
-                                card->bucket++;
-                                if (card->bucket > 5) card->bucket = 5;
-                                exam_view_get_next_card();
-                            }
-                        }
-
-                        UiBox *wrong_button = ui_button(str("wrong")) {
-                            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-                            UiBox *label = ui_label(0, "label", str("Wrong"));
-                            ui_style_box_vec4(label, UI_TEXT_COLOR, ui->theme->text_color_red);
-                            if (wrong_button->signals.clicked) {
-                                Card *card = view->shown_card;
-                                card->bucket = 0;
-                                exam_view_get_next_card();
-                            }
-                        }
+                UiBox *wrong_button = ui_button(str("wrong")) {
+                    ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+                    UiBox *label = ui_label(0, "label", str("Wrong"));
+                    ui_style_box_vec4(label, UI_TEXT_COLOR, ui->theme->text_color_red);
+                    if (wrong_button->signals.clicked) {
+                        Card *card = view->shown_card;
+                        card->bucket = 0;
+                        exam_view_get_next_card();
                     }
                 }
             }
         }
+    }
 
+    ui_scroll_box(str("scrollbox"), true) {
+        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+        ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+        ui_style_f32(UI_SPACING, ui->theme->spacing);
+        ui_style_vec2(UI_PADDING, ui->theme->padding);
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         if (! view->done) build_card(view->shown_card, 0, false);
     }
 }
