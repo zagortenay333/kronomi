@@ -39,7 +39,7 @@ istruct (View) {
             Buf *buf;
             Buf *sound_buf;
             U64 editor_cursor;
-            U64 timer_idx;
+            Timer *timer_to_edit;
             Timer timer;
         } editor;
 
@@ -67,8 +67,8 @@ ienum (CommandTag, U8) {
 istruct (Command) {
     CommandTag tag;
     Bool skip_config_save;
-    U64 idx;
-    Timer timer;
+    U64 index;
+    Timer *timer;
 };
 
 istruct (Context) {
@@ -79,7 +79,7 @@ istruct (Context) {
     Array(Command) commands;
     Mem *config_mem;
     U64 config_mem_fragmentation;
-    Array(Timer) timers;
+    Array(Timer*) timers;
     F32 editor_width;
     F32 editor_height;
     TickId tick_id;
@@ -90,16 +90,14 @@ static Context *context;
 
 #define push_command(...) array_push_lit(&context->commands, __VA_ARGS__)
 
-static Void destroy_sound (U64 idx) {
-    Timer *timer = array_ref(&context->timers, idx);
+static Void destroy_sound (Timer *timer) {
     if (! timer->sound_id) return;
     win_sound_cancel(timer->sound_id);
     mem_free(mem_root, .old_ptr=timer->sound_id);
     timer->sound_id = 0;
 }
 
-static Void play_sound (U64 idx) {
-    Timer *timer = array_ref(&context->timers, idx);
+static Void play_sound (Timer *timer) {
     if (timer->sound_id) return;
     if (! timer->sound.count) return;
     timer->sound_id = win_sound_play(mem_root, timer->sound, true);
@@ -120,7 +118,7 @@ static Void save_config () {
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
     astr_push_cstr(&astr, "timers = [\n");
-    array_iter (timer, &context->timers, *) {
+    array_iter (timer, &context->timers) {
         astr_push_cstr(&astr, "    {\n");
         astr_push_fmt(&astr,  "        clock_size = %f\n", timer->clock_size);
         astr_push_fmt(&astr,  "        message = \"%.*s\"\n", STR(timer->message));
@@ -157,7 +155,7 @@ static Void load_config () {
 
     ConfigAst *timers = config_get_array(cfg, cfg->root, "timers");
     array_iter (timer_ast, &timers->children) {
-        Timer *timer = array_push_slot(&context->timers);
+        Timer *timer      = mem_new(context->config_mem, Timer);
         timer->clock_size = config_get_f64(cfg, timer_ast, "clock_size");
         timer->message    = config_get_string(cfg, timer_ast, "message", context->config_mem);
         timer->sound      = config_get_string(cfg, timer_ast, "sound", context->config_mem);
@@ -166,15 +164,15 @@ static Void load_config () {
         timer->start      = 0;
         timer->state      = TIMER_RESET;
         timer->sound_id   = 0;
+        array_push(&context->timers, timer);
     }
 }
 
-static Void build_timer (U64 idx, Bool *out_card_deleted) {
+static Void build_timer (Timer *timer, Bool *out_card_deleted) {
     tmem_new(tm);
 
-    Timer *timer = array_ref(&context->timers, idx);
-
-    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", idx) {
+    U64 n = array_get_last(&ui->box_stack)->children.count;
+    UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "card%lu", n) {
         ui_tag("card");
         ui_style_vec2(UI_PADDING, vec2(ui->theme->border_width.x, ui->theme->border_width.x));
 
@@ -202,14 +200,14 @@ static Void build_timer (U64 idx, Bool *out_card_deleted) {
                     UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=idx);
+                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .timer=timer);
                     }
 
                     UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
                         if (delete_button->signals.clicked) {
-                            push_command(.tag=CMD_DEL, .idx=idx);
+                            push_command(.tag=CMD_DEL, .timer=timer);
                             if (out_card_deleted) *out_card_deleted = true;
                         }
                     }
@@ -225,7 +223,7 @@ static Void build_timer (U64 idx, Bool *out_card_deleted) {
                     UiBox *start_button = ui_button(str("start")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Start"));
-                        if (start_button->signals.clicked) push_command(.tag=CMD_START, .idx=idx);
+                        if (start_button->signals.clicked) push_command(.tag=CMD_START, .timer=timer);
                     }
                 }
 
@@ -233,7 +231,7 @@ static Void build_timer (U64 idx, Bool *out_card_deleted) {
                     UiBox *pause_button = ui_button(str("pause")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Pause"));
-                        if (pause_button->signals.clicked) push_command(.tag=CMD_PAUSE, .idx=idx);
+                        if (pause_button->signals.clicked) push_command(.tag=CMD_PAUSE, .timer=timer);
                     }
                 }
 
@@ -241,7 +239,7 @@ static Void build_timer (U64 idx, Bool *out_card_deleted) {
                     UiBox *reset_button = ui_button(str("reset")) {
                         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                         ui_label(UI_BOX_CLICK_THROUGH, "label", str("Reset"));
-                        if (reset_button->signals.clicked) push_command(.tag=CMD_RESET, .idx=idx);
+                        if (reset_button->signals.clicked) push_command(.tag=CMD_RESET, .timer=timer);
                     }
                 }
             }
@@ -281,8 +279,7 @@ static Void build_view_search () {
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Apply"));
                 if (apply_button->signals.clicked) {
                     if (view->delete_searched) {
-                        array_sort_cmp(&view->searched, app_cmp_search_results_on_idx);
-                        array_iter_back (it, &view->searched) push_command(.tag=CMD_DEL, .idx=it.idx, .skip_config_save=true);
+                        array_iter (it, &view->searched) push_command(.tag=CMD_DEL, .timer=array_get(&context->timers, it.idx), .skip_config_save=true);
                         view->searched.count = 0;
                         push_command(.tag=CMD_SAVE_CONFIG);
                     }
@@ -306,7 +303,7 @@ static Void build_view_search () {
             tmem_new(tm);
             String needle = buf_get_str(view->buf, tm);
 
-            array_iter (timer, &context->timers, *) {
+            array_iter (timer, &context->timers) {
                 I64 score = str_fuzzy_search(needle, timer->message, 0);
                 if (score != INT64_MIN) array_push_lit(&view->searched, .score=score, .idx=ARRAY_IDX);
             }
@@ -315,7 +312,7 @@ static Void build_view_search () {
         }
 
         Bool deleted = false;
-        array_iter (card, &view->searched, *) build_timer(card->idx, &deleted);
+        array_iter (it, &view->searched) build_timer(array_get(&context->timers, it.idx), &deleted);
         if (deleted) view->buf_version--; // To refresh the searched array.
     }
 }
@@ -397,11 +394,13 @@ static Void build_view_editor () {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Ok"));
                 if (ok_button->signals.clicked) {
-                    if (view->timer_idx != ARRAY_NIL_IDX) push_command(.tag=CMD_DEL, .idx=view->timer_idx, .skip_config_save=true);
-                    view->timer.message = buf_get_str(view->buf, context->config_mem),
-                    view->timer.sound = buf_get_str(view->sound_buf, context->config_mem),
-                    view->timer.remaining = view->timer.preset;
-                    push_command(.tag=CMD_ADD, .timer=view->timer);
+                    if (view->timer_to_edit) push_command(.tag=CMD_DEL, .timer=view->timer_to_edit, .skip_config_save=true);
+                    Timer *new_timer = mem_new(context->config_mem, Timer);
+                    *new_timer = view->timer;
+                    new_timer->message = buf_get_str(view->buf, context->config_mem),
+                    new_timer->sound = buf_get_str(view->sound_buf, context->config_mem),
+                    new_timer->remaining = view->timer.preset;
+                    push_command(.tag=CMD_ADD, .timer=new_timer);
                     push_command(.tag=CMD_VIEW_MAIN);
                 }
             }
@@ -460,7 +459,7 @@ static Void build_view_main () {
 
         UiBox *add_button = ui_button(str("add")) {
             ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
-            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR, .idx=ARRAY_NIL_IDX);
+            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDITOR);
             if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add timer")); }
         }
 
@@ -478,7 +477,7 @@ static Void build_view_main () {
         ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        array_iter (_, &context->timers, *) { _; build_timer(ARRAY_IDX, 0); }
+        array_iter (timer, &context->timers) build_timer(timer, 0);
     }
 }
 
@@ -520,14 +519,14 @@ static Void execute_commands () {
         } break;
 
         case CMD_DEL: {
-            destroy_sound(cmd->idx);
-            array_remove(&context->timers, cmd->idx);
+            destroy_sound(cmd->timer);
+            array_find_remove(&context->timers, IT == cmd->timer);
             context->config_mem_fragmentation++;
             if (! cmd->skip_config_save) save_config();
         } break;
 
         case CMD_START: {
-            Timer *timer = array_ref(&context->timers, cmd->idx);
+            Timer *timer = cmd->timer;
             assert_dbg(timer->state == TIMER_PAUSED || timer->state == TIMER_RESET);
             timer->state = TIMER_RUNNING;
             timer->start = os_get_time_ms();
@@ -537,7 +536,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_PAUSE: {
-            Timer *timer = array_ref(&context->timers, cmd->idx);
+            Timer *timer = cmd->timer;
             assert_dbg(timer->state == TIMER_RUNNING);
             timer->state = TIMER_PAUSED;
             if (context->n_running == 0) context->tick_id = win_tick_start(1000);
@@ -545,8 +544,8 @@ static Void execute_commands () {
         } break;
 
         case CMD_RESET: {
-            Timer *timer = array_ref(&context->timers, cmd->idx);
-            destroy_sound(cmd->idx);
+            Timer *timer = cmd->timer;
+            destroy_sound(timer);
             timer->state = TIMER_RESET;
             timer->remaining = timer->preset;
         } break;
@@ -566,11 +565,11 @@ static Void execute_commands () {
         case CMD_VIEW_EDITOR: {
             destroy_current_view();
             context->view.tag = VIEW_EDITOR;
-            Timer *timer = (cmd->idx != ARRAY_NIL_IDX) ? array_ref(&context->timers, cmd->idx) : 0;
-            if (timer) destroy_sound(cmd->idx);
-            context->view.editor.timer_idx = cmd->idx;
-            context->view.editor.buf = buf_new(context->view_mem, (cmd->idx == ARRAY_NIL_IDX) ? str("") : timer->message);
-            context->view.editor.sound_buf = buf_new(context->view_mem, (cmd->idx == ARRAY_NIL_IDX) ? str("") : timer->sound);
+            Timer *timer = cmd->timer;
+            if (timer) destroy_sound(timer);
+            context->view.editor.timer_to_edit = timer;
+            context->view.editor.buf = buf_new(context->view_mem, timer ? timer->message : str(""));
+            context->view.editor.sound_buf = buf_new(context->view_mem, timer ? timer->sound : str(""));
             if (timer) context->view.editor.timer = *timer;
         } break;
         }
@@ -587,7 +586,7 @@ Void timer_view_build (UiViewInstance *, Bool visible) {
         execute_commands();
     }
 
-    array_iter (timer, &context->timers, *) {
+    array_iter (timer, &context->timers) {
         if (timer->state != TIMER_RUNNING) continue;
 
         U64 now = os_get_time_ms();
@@ -595,11 +594,10 @@ Void timer_view_build (UiViewInstance *, Bool visible) {
         timer->start = now;
 
         if (timer->remaining == 0) {
-            play_sound(ARRAY_IDX);
+            play_sound(timer);
             timer->state = TIMER_NOTIF;
-            Timer t = *timer;
-            array_remove(&context->timers, ARRAY_IDX);
-            array_insert(&context->timers, t, 0);
+            array_find_remove(&context->timers, IT == timer);
+            array_insert(&context->timers, timer, 0);
         }
     }
 
