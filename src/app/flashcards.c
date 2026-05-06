@@ -17,8 +17,8 @@ istruct (Deck) {
     String path;
 };
 
-array_typedef(Card, Card);
-array_typedef(Deck, Deck);
+array_typedef(Card*, Card);
+array_typedef(Deck*, Deck);
 
 ienum (ViewTag, U8) {
     VIEW_MAIN,
@@ -42,7 +42,7 @@ istruct (View) {
             U64 bucket;
             U64 question_cursor;
             U64 answer_cursor;
-            U64 card_idx;
+            Card *card_to_edit;
         } card_editor;
 
         struct {
@@ -67,8 +67,8 @@ istruct (View) {
 
         struct {
             Bool done;
-            U64 shown_card;
-            ArrayU64 cards;
+            Card *shown_card;
+            ArrayCard cards;
         } exam;
     };
 };
@@ -92,8 +92,10 @@ ienum (CommandTag, U8) {
 istruct (Command) {
     CommandTag tag;
     Bool skip_config_save;
-    U64 idx;
-    Card card;
+    U64 index;
+    Deck *deck;
+    Card *card;
+    Card *card2;
     String text;
 };
 
@@ -105,9 +107,9 @@ istruct (Context) {
     Array(Command) commands;
     Mem *config_mem;
     U64 config_mem_fragmentation;
-    U64 active_deck_idx;
     ArrayDeck decks;
     ArrayCard cards;
+    Deck *active_deck;
     U64 session;
     F32 editor_width;
     F32 editor_height;
@@ -115,14 +117,12 @@ istruct (Context) {
 
 static Context *context;
 
-static Void load_deck (U64 deck_idx, U64 *out_session, ArrayCard *out_cards);
+static Void load_deck (Deck *deck, U64 *out_session, ArrayCard *out_cards);
 
 #define push_command(...) array_push_lit(&context->commands, __VA_ARGS__)
 
-static Void export_deck (U64 idx, String export_dir_path) {
+static Void export_deck (Deck *deck, String export_dir_path) {
     tmem_new(tm);
-
-    Deck *deck = array_ref(&context->decks, idx);
 
     String name = str_suffix_from_last(deck->path, '/');
     name = str_prefix_to_last(name, '.');
@@ -131,10 +131,10 @@ static Void export_deck (U64 idx, String export_dir_path) {
     U64 session;
     ArrayCard cards;
     array_init(&cards, tm);
-    load_deck(idx, &session, &cards);
+    load_deck(deck, &session, &cards);
 
     AString csv = astr_new(tm);
-    array_iter (card, &cards, *) {
+    array_iter (card, &cards) {
         astr_push_byte(&csv, '"');
         astr_push_str(&csv, str_replace_all(tm, card->question, str("\""), str("\"\"")));
         astr_push_cstr(&csv, "\",\"");
@@ -152,7 +152,7 @@ static Void save_active_deck () {
 
     AString astr = astr_new(tm);
     astr_push_fmt(&astr, "session = %lu\ncards = [\n", context->session);
-    array_iter (card, &context->cards, *) {
+    array_iter (card, &context->cards) {
         String question = str_escape(tm, card->question);
         String answer = str_escape(tm, card->answer);
         astr_push_cstr(&astr, "    {\n");
@@ -163,27 +163,24 @@ static Void save_active_deck () {
     }
     astr_push_cstr(&astr, "]\n");
 
-    Deck deck = array_get(&context->decks, context->active_deck_idx);
-    fs_ensure_file(deck.path, (String){});
-    fs_write_entire_file(deck.path, astr_to_str(&astr));
+    fs_ensure_file(context->active_deck->path, (String){});
+    fs_write_entire_file(context->active_deck->path, astr_to_str(&astr));
 }
 
-static Void load_deck (U64 deck_idx, U64 *out_session, ArrayCard *out_cards) {
-    Deck deck = array_get(&context->decks, deck_idx);
-    Bool file_exists = fs_file_exists(deck.path);
-    fs_ensure_file(deck.path, (String){});
-    if (! file_exists) fs_write_entire_file(deck.path, str("session = 1\ncards = []"));
+static Void load_deck (Deck *deck, U64 *out_session, ArrayCard *out_cards) {
+    Bool file_exists = fs_file_exists(deck->path);
+    fs_ensure_file(deck->path, (String){});
+    if (! file_exists) fs_write_entire_file(deck->path, str("session = 1\ncards = []"));
 
     tmem_new(tm);
-    Config *cfg = config_parse(tm, deck.path);
+    Config *cfg = config_parse(tm, deck->path);
     *out_session = config_get_u64(cfg, cfg->root, "session");
     ConfigAst *cards = config_get_array(cfg, cfg->root, "cards");
     array_iter (card_ast, &cards->children) {
-        Card card = {
-            .bucket   = config_get_u64(cfg, card_ast, "bucket"),
-            .question = config_get_string(cfg, card_ast, "question", context->config_mem),
-            .answer   = config_get_string(cfg, card_ast, "answer", context->config_mem),
-        };
+        Card *card = mem_new(context->config_mem, Card);
+        card->bucket   = config_get_u64(cfg, card_ast, "bucket");
+        card->question = config_get_string(cfg, card_ast, "question", context->config_mem);
+        card->answer   = config_get_string(cfg, card_ast, "answer", context->config_mem);
         array_push(out_cards, card);
     }
 }
@@ -191,14 +188,11 @@ static Void load_deck (U64 deck_idx, U64 *out_session, ArrayCard *out_cards) {
 static Void load_active_deck () {
     context->config_mem_fragmentation += context->cards.count;
     context->cards.count = 0;
-
     if (context->decks.count == 0) return;
-
-    U64 idx = array_find(&context->decks, IT.active);
-    if (idx == ARRAY_NIL_IDX) idx = 0;
-    context->active_deck_idx = idx;
-
-    load_deck(idx, &context->session, &context->cards);
+    Deck *deck = array_find_get(&context->decks, IT->active);
+    if (! deck) deck = array_get(&context->decks, 0);
+    context->active_deck = deck;
+    load_deck(deck, &context->session, &context->cards);
 }
 
 static Void save_config () {
@@ -211,7 +205,7 @@ static Void save_config () {
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
     astr_push_cstr(&astr, "decks = [\n");
-    array_iter (deck, &context->decks, *) {
+    array_iter (deck, &context->decks) {
         astr_push_cstr(&astr, "    {\n");
         astr_push_fmt(&astr,  "        active = %s\n", deck->active ? "true" : "false");
         astr_push_fmt(&astr,  "        path = \"%.*s\"\n", STR(deck->path));
@@ -247,20 +241,18 @@ static Void load_config () {
 
     ConfigAst *decks = config_get_array(cfg, cfg->root, "decks");
     array_iter (deck_ast, &decks->children) {
-        Deck deck = {
-            .active = config_get_bool(cfg, deck_ast, "active"),
-            .path   = config_get_string(cfg, deck_ast, "path", context->config_mem),
-        };
+        Deck *deck = mem_new(context->config_mem, Deck);
+        deck->active = config_get_bool(cfg, deck_ast, "active");
+        deck->path   = config_get_string(cfg, deck_ast, "path", context->config_mem);
         array_push(&context->decks, deck);
     }
 
     load_active_deck();
 }
 
-static Void build_card (U64 card_idx, Bool *out_card_deleted, Bool reactive) {
-    Card *card = array_ref(&context->cards, card_idx);
-
-    UiBox *card_box = ui_box_fmt(reactive ? UI_BOX_CAN_FOCUS : 0, "card%lu", card_idx) {
+static Void build_card (Card *card, Bool *out_card_deleted, Bool reactive) {
+    U64 n = array_get_last(&ui->box_stack)->children.count;
+    UiBox *card_box = ui_box_fmt(reactive ? UI_BOX_CAN_FOCUS : 0, "card%lu", n) {
         ui_tag("card");
 
         ui_box(0, "header") {
@@ -273,14 +265,14 @@ static Void build_card (U64 card_idx, Bool *out_card_deleted, Bool reactive) {
                     UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDIT_CARD, .idx=card_idx);
+                        if (edit_button->signals.clicked) push_command(.tag=CMD_VIEW_EDIT_CARD, .card=card);
                     }
 
                     UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
                         ui_tag("button");
                         ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
                         if (delete_button->signals.clicked) {
-                            push_command(.tag=CMD_DEL_CARD, .idx=card_idx);
+                            push_command(.tag=CMD_DEL_CARD, .card=card);
                             if (out_card_deleted) *out_card_deleted = true;
                         }
                     }
@@ -357,11 +349,10 @@ static Void build_view_search_cards () {
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Apply"));
                 if (apply_button->signals.clicked) {
                     if (view->delete_searched) {
-                        array_sort_cmp(&view->searched_cards, app_cmp_search_results_on_idx);
-                        array_iter_back (it, &view->searched_cards) push_command(.tag=CMD_DEL_CARD, .idx=it.idx, .skip_config_save=true);
+                        array_iter (it, &view->searched_cards) push_command(.tag=CMD_DEL_CARD, .card=array_get(&context->cards, it.idx), .skip_config_save=true);
                         view->searched_cards.count = 0;
                     } else if (view->move_to_bucket != -1) {
-                        array_iter (c, &view->searched_cards) push_command(.tag=CMD_MOVE_CARD, .idx=c.idx, .card.bucket=view->move_to_bucket, .skip_config_save=!ARRAY_ITER_DONE);
+                        array_iter (it, &view->searched_cards) push_command(.tag=CMD_MOVE_CARD, .card=array_get(&context->cards, it.idx), .index=view->move_to_bucket, .skip_config_save=!ARRAY_ITER_DONE);
                     }
 
                     push_command(.tag=CMD_SAVE_CONFIG);
@@ -384,7 +375,7 @@ static Void build_view_search_cards () {
         tmem_new(tm);
         String needle = buf_get_str(view->search_buf, tm);
 
-        array_iter (card, &context->cards, *) {
+        array_iter (card, &context->cards) {
             if ((view->search_in_bucket != -1) && (card->bucket != cast(U64, view->search_in_bucket))) {
                 continue;
             } else if (view->fuzzy_search) {
@@ -401,9 +392,9 @@ static Void build_view_search_cards () {
 
         if (view->fuzzy_search) array_sort_cmp(&view->searched_cards, app_cmp_search_results);
 
-        array_iter (card, &view->searched_cards, *) {
+        array_iter (it, &view->searched_cards) {
             if (ARRAY_IDX == view->show_more_idx) break;
-            build_card(card->idx, 0, true);
+            build_card(array_get(&context->cards, it.idx), 0, true);
         }
 
         app_show_more_button(str("show_more"), &view->show_more_idx, view->searched_cards.count);
@@ -454,7 +445,7 @@ static Void build_view_deck_browser () {
                     }
 
                     String export_dir = buf_get_str(view->export_buf, tm);
-                    if (export_dir.count) array_iter (d, &view->searched_decks) export_deck(d.idx, export_dir);
+                    if (export_dir.count) array_iter (it, &view->searched_decks) export_deck(array_get(&context->decks, it.idx), export_dir);
 
                     push_command(.tag=CMD_SAVE_CONFIG);
                     push_command(.tag=CMD_VIEW_MAIN);
@@ -478,7 +469,7 @@ static Void build_view_deck_browser () {
             tmem_new(tm);
             String needle = buf_get_str(view->search_buf, tm);
 
-            array_iter (deck, &context->decks, *) {
+            array_iter (deck, &context->decks) {
                 I64 score = str_fuzzy_search(needle, deck->path, 0);
                 if (score != INT64_MIN) array_push_lit(&view->searched_decks, .score=score, .idx=ARRAY_IDX);
             }
@@ -488,15 +479,15 @@ static Void build_view_deck_browser () {
 
         Bool deck_deleted = false;
 
-        array_iter (d, &view->searched_decks) {
-            Deck *deck = array_ref(&context->decks, d.idx);
+        array_iter (it, &view->searched_decks) {
+            Deck *deck = array_get(&context->decks, it.idx);
 
-            UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "deck%lu", d.idx) {
+            UiBox *box = ui_box_fmt(UI_BOX_CAN_FOCUS, "deck%lu", it.idx) {
                 ui_tag("card");
 
                 ui_box(0, "header") {
                     UiBox *checkbox = ui_checkbox("checkbox", &deck->active);
-                    if (checkbox->signals.clicked && deck->active) push_command(.tag=CMD_ACTIVATE_DECK, .idx=d.idx);
+                    if (checkbox->signals.clicked && deck->active) push_command(.tag=CMD_ACTIVATE_DECK, .deck=deck);
 
                     ui_hspacer();
 
@@ -505,17 +496,14 @@ static Void build_view_deck_browser () {
                             UiBox *edit_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "edit") {
                                 ui_tag("button");
                                 ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_EDIT);
-                                if (edit_button->signals.clicked) {
-                                    Deck *deck = array_ref(&context->decks, d.idx);
-                                    win_open_file_url(deck->path);
-                                }
+                                if (edit_button->signals.clicked) win_open_file_url(deck->path);
                             }
 
                             UiBox *delete_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "delete") {
                                 ui_tag("button");
                                 ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_TRASH);
                                 if (delete_button->signals.clicked) {
-                                    push_command(.tag=CMD_DEL_DECK, .idx=d.idx);
+                                    push_command(.tag=CMD_DEL_DECK, .deck=deck);
                                     deck_deleted = true;
                                 }
                             }
@@ -536,9 +524,9 @@ static Void exam_view_collect_cards () {
 
     view->cards.count = 0;
 
-    array_iter (card, &context->cards, *) {
+    array_iter (card, &context->cards) {
         U64 days = 1lu << min(5lu, card->bucket);
-        if ((context->session % days) == 0) array_push(&view->cards, ARRAY_IDX);
+        if ((context->session % days) == 0) array_push(&view->cards, card);
     }
 
     array_reverse(&view->cards);
@@ -614,7 +602,7 @@ static Void build_view_exam () {
                             UiBox *label = ui_label(0, "label", str("Correct"));
                             ui_style_box_vec4(label, UI_TEXT_COLOR, ui->theme->text_color_green);
                             if (correct_button->signals.clicked) {
-                                Card *card = array_ref(&context->cards, view->shown_card);
+                                Card *card = view->shown_card;
                                 card->bucket++;
                                 if (card->bucket > 5) card->bucket = 5;
                                 exam_view_get_next_card();
@@ -626,7 +614,7 @@ static Void build_view_exam () {
                             UiBox *label = ui_label(0, "label", str("Wrong"));
                             ui_style_box_vec4(label, UI_TEXT_COLOR, ui->theme->text_color_red);
                             if (wrong_button->signals.clicked) {
-                                Card *card = array_ref(&context->cards, view->shown_card);
+                                Card *card = view->shown_card;
                                 card->bucket = 0;
                                 exam_view_get_next_card();
                             }
@@ -670,7 +658,7 @@ static Void build_view_card_editor () {
             }
 
             if (! view->question_buf) {
-                String text = (view->card_idx == ARRAY_NIL_IDX) ? str("") : array_ref(&context->cards, view->card_idx)->question;
+                String text = view->card_to_edit ? view->card_to_edit->question : str("");
                 view->question_buf = buf_new(context->view_mem, text);
             }
 
@@ -693,7 +681,7 @@ static Void build_view_card_editor () {
             }
 
             if (! view->answer_buf) {
-                String text = (view->card_idx == ARRAY_NIL_IDX) ? str("") : array_ref(&context->cards, view->card_idx)->answer;
+                String text = view->card_to_edit ? view->card_to_edit->answer : str("");
                 view->answer_buf = buf_new(context->view_mem, text);
             }
 
@@ -709,9 +697,7 @@ static Void build_view_card_editor () {
                 ui_tag("row");
                 ui_label(0, "title", str("Bucket"));
                 ui_hspacer();
-                if (box->start_frame == ui->frame && view->card_idx != ARRAY_NIL_IDX) {
-                    view->bucket = array_ref(&context->cards, view->card_idx)->bucket;
-                }
+                if (box->start_frame == ui->frame && view->card_to_edit) view->bucket = view->card_to_edit->bucket;
                 I64 val = view->bucket;
                 UiBox *picker = ui_int_picker(str("picker"), &val, 0, 5, 1);
                 view->bucket = val;
@@ -730,16 +716,15 @@ static Void build_view_card_editor () {
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_label(UI_BOX_CLICK_THROUGH, "label", str("Ok"));
                 if (ok_button->signals.clicked) {
-                    Card card = {
-                        .bucket   = view->bucket,
-                        .question = buf_get_str(view->question_buf, context->config_mem),
-                        .answer   = buf_get_str(view->answer_buf, context->config_mem),
-                    };
+                    Card *new_card = mem_new(context->config_mem, Card);
+                    new_card->bucket   = view->bucket;
+                    new_card->question = buf_get_str(view->question_buf, context->config_mem);
+                    new_card->answer   = buf_get_str(view->answer_buf, context->config_mem);
 
-                    if (view->card_idx == ARRAY_NIL_IDX) {
-                        push_command(.tag=CMD_ADD_CARD, .card=card);
+                    if (view->card_to_edit) {
+                        push_command(.tag=CMD_EDIT_CARD, .card=view->card_to_edit, .card2=new_card);
                     } else {
-                        push_command(.tag=CMD_EDIT_CARD, .idx=view->card_idx, .card=card);
+                        push_command(.tag=CMD_ADD_CARD, .card=new_card);
                     }
 
                     push_command(.tag=CMD_VIEW_MAIN);
@@ -829,7 +814,7 @@ static Void build_view_main () {
 
         UiBox *add_button = ui_button(str("add")) {
             ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_PLUS);
-            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDIT_CARD, .idx=ARRAY_NIL_IDX);
+            if (add_button->signals.clicked) push_command(.tag=CMD_VIEW_EDIT_CARD);
             if (add_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Add flashcard")); }
         }
 
@@ -867,10 +852,9 @@ static Void build_view_main () {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
-        array_iter (_, &context->cards, *) {
-            _;
+        array_iter (card, &context->cards) {
             if (ARRAY_IDX == view->show_more_idx) break;
-            build_card(ARRAY_IDX, 0, true);
+            build_card(card, 0, true);
         }
 
         app_show_more_button(str("show_more"), &view->show_more_idx, context->cards.count);
@@ -917,41 +901,39 @@ static Void execute_commands () {
         } break;
 
         case CMD_DEL_CARD: {
-            array_remove(&context->cards, cmd.idx);
+            array_find_remove(&context->cards, IT == cmd.card);
             context->config_mem_fragmentation++;
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_EDIT_CARD: {
-            array_remove(&context->cards, cmd.idx);
-            array_push(&context->cards, cmd.card);
+            array_find_remove(&context->cards, IT == cmd.card);
+            array_push(&context->cards, cmd.card2);
             context->config_mem_fragmentation++;
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_MOVE_CARD: {
-            array_ref(&context->cards, cmd.idx)->bucket = cmd.card.bucket;
+            cmd.card->bucket = cmd.index;
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_ADD_DECK: {
-            array_push_lit(&context->decks, .path=cmd.text);
+            Deck *deck = mem_new(context->config_mem, Deck);
+            deck->path = cmd.text;
+            array_push(&context->decks, deck);
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_DEL_DECK: {
-            array_remove(&context->decks, cmd.idx);
+            array_find_remove(&context->decks, IT == cmd.deck);
             context->config_mem_fragmentation++;
-            if (cmd.idx == context->active_deck_idx) {
-                load_active_deck();
-            } else if (cmd.idx < context->active_deck_idx) {
-                context->active_deck_idx--;
-            }
+            if (cmd.deck == context->active_deck) load_active_deck();
             if (! cmd.skip_config_save) save_config();
         } break;
 
         case CMD_ACTIVATE_DECK: {
-            array_iter (deck, &context->decks, *) deck->active = (ARRAY_IDX == cmd.idx);
+            array_iter (deck, &context->decks) deck->active = (deck == cmd.deck);
             load_active_deck();
             if (! cmd.skip_config_save) save_config();
         } break;
@@ -964,7 +946,7 @@ static Void execute_commands () {
         case CMD_VIEW_EDIT_CARD: {
             destroy_current_view();
             context->view.tag = VIEW_CARD_EDITOR;
-            context->view.card_editor.card_idx = cmd.idx;
+            context->view.card_editor.card_to_edit = cmd.card;
         } break;
 
         case CMD_VIEW_EXAM: {
