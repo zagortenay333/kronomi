@@ -378,12 +378,14 @@ UiBox *ui_image (String id, Texture *texture, Bool blur, Vec4 tint, F32 pref_wid
 }
 
 UiBox *ui_toggle (CString id, Bool *val) {
+    F32 scale = win_get_display_scale();
+
     UiBox *bg = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, id) {
-        F32 s = 24.0;
+        F32 s = 24.0 * scale;
 
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 2*s, 1});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, s, 1});
-        ui_style_vec4(UI_RADIUS, vec4(s/2, s/2, s/2, s/2));
+        ui_style_vec4(UI_RADIUS, vec4(s/2/scale, s/2/scale, s/2/scale, s/2/scale));
         ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z1);
         ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color);
         ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width);
@@ -409,13 +411,13 @@ UiBox *ui_toggle (CString id, Bool *val) {
         }
 
         ui_box(UI_BOX_CLICK_THROUGH, "toggle_knob") {
-            F32 ks = 16.0;
+            F32 ks = 16.0 * scale;
             ui_style_f32(UI_EDGE_SOFTNESS, 1.3);
-            ui_style_f32(UI_FLOAT_X, *val ? (2*s - ks - 4) : 4);
-            ui_style_f32(UI_FLOAT_Y, 4);
+            ui_style_f32(UI_FLOAT_X, *val ? (2*s - ks - 4*scale) : 4*scale);
+            ui_style_f32(UI_FLOAT_Y, 4*scale);
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ks, 1});
             ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ks, 1});
-            ui_style_vec4(UI_RADIUS, vec4(ks/2, ks/2, ks/2, ks/2));
+            ui_style_vec4(UI_RADIUS, vec4(ks/2/scale, ks/2/scale, ks/2/scale, ks/2/scale));
             ui_style_vec4(UI_BG_COLOR, ui->theme->slider_knob_color);
             ui_style_f32(UI_OUTSET_SHADOW_WIDTH, ui->theme->out_shadow_width);
             ui_style_vec4(UI_OUTSET_SHADOW_COLOR, ui->theme->out_shadow_color);
@@ -835,13 +837,27 @@ Void ui_modal_pop () {
     ui_pop_parent();
 }
 
+static Void layout_tooltip (UiBox *tooltip) {
+    UiBox *r = ui->root;
+
+    F32 x = ui->mouse.x;
+    F32 x2 = r->rect.x + r->rect.w;
+
+    if (x + tooltip->rect.w > x2) {
+        x -= (x + tooltip->rect.w) - x2;
+        x = max(0, x);
+    }
+
+    ui_style_box_f32(tooltip, UI_FLOAT_X, x);
+    ui_style_box_f32(tooltip, UI_FLOAT_Y, ui->mouse.y + 20);
+}
+
 UiBox *ui_tooltip_push (String id) {
     ui_push_parent(ui->root);
     ui_push_clip(ui->root, false);
 
     UiBox *tooltip = ui_box_push_str(0, id);
-    ui_style_box_f32(tooltip, UI_FLOAT_X, ui->mouse.x);
-    ui_style_box_f32(tooltip, UI_FLOAT_Y, ui->mouse.y + 20);
+    array_push_lit(&ui->deferred_layout_fns, layout_tooltip, tooltip);
     ui_style_box_vec4(tooltip, UI_BG_COLOR, ui->theme->bg_color_popup);
     ui_style_box_vec4(tooltip, UI_RADIUS, ui->theme->radius);
     ui_style_box_vec2(tooltip, UI_PADDING, ui->theme->padding);
@@ -2056,4 +2072,138 @@ UiBox *ui_drawer_push (String id, String title) {
 Void ui_drawer_pop () {
     ui_pop_parent();
     ui_pop_parent();
+}
+
+static Void size_line_graph (UiBox *box, U64 axis) {
+    assert_dbg(axis == UI_AXIS_HORIZONTAL);
+    // Sizing done in draw_graph().
+}
+
+static Void draw_line_graph (UiBox *box) {
+    UiBox *container = box->parent;
+    UiGraphData *data = cast(UiGraphData*, box->scratch);
+
+    Rect r = container->rect;
+
+    if (r.w <= 0 || r.h <= 0) return;
+    if (data->records.count == 0) return;
+
+    F32 scale = win_get_display_scale();
+
+    F32 softness   = box->style.edge_softness;
+    Vec4 dot_col   = ui->theme->text_color_green;
+    Vec4 line_col  = ui->theme->text_color_green;
+    Vec4 area_col  = ui->theme->text_color_green;
+    area_col.w    *= .2;
+    Vec4 guide_col = ui->theme->text_color_faint;
+    guide_col.w   *= .5;
+    F32 dot_size   = scale * ui->config->font_size / 3;
+    F32 line_thick = dot_size / 3;
+    F32 spacing    = ui->theme->spacing;
+
+    if (data->records.count > 1) {
+        F32 free_space = r.w - data->records.count * (2*dot_size);
+        spacing = free_space / (data->records.count - 1);
+        spacing = max(spacing, ui->theme->spacing);
+    }
+
+    r.y += dot_size;
+    r.h -= 2*dot_size;
+
+    box->rect.w = (data->records.count * 2*dot_size) + (data->records.count - 1) * spacing;
+    if (box->rect.w > container->rect.w) r.h -= ui->config->scrollbar_width;
+
+    { // Determine which dot is hovered:
+        data->hovered = 0;
+        if (box->signals.hovered) {
+            F32 w = spacing + 2*dot_size;
+            F32 x = r.x + dot_size + container->content.x;
+
+            array_iter (record, &data->records, *) {
+                if (ui_within_box((Rect){ .x=(x - w/2), .y=r.y, .w=w, .h=r.h }, ui->mouse)) {
+                    data->hovered = record;
+                    break;
+                }
+                x += w;
+            }
+        }
+    }
+
+    { // Draw guidelines:
+        array_iter (guideline, &data->guidelines) {
+            F32 h  = (cast(F64, guideline) / data->y_max) * r.h;
+            F32 y  = r.y + r.h - h;
+            Vec2 a = {r.x, y};
+            Vec2 b = {r.x + r.w, y};
+            dr_line(a, b, guide_col, 0, 1 * win_get_display_scale());
+        }
+    }
+
+    { // Draw area under graph:
+        F32 h = (cast(F64, array_get(&data->records, 0).value) / data->y_max) * r.h;
+        Vec2 p1 = vec2(r.x + dot_size + container->content.x, r.y + r.h - h);
+
+        array_iter_from (record, &data->records, 1, *) {
+            F32 h   = (cast(F64, record->value) / data->y_max) * r.h;
+            Vec2 p2 = { p1.x + spacing + 2*dot_size, r.y + r.h - h };
+            Vec2 p3;
+            Vec2 top_left;
+            Vec2 bottom_right;
+            if (p1.y < p2.y) {
+                p3.x = p1.x;
+                p3.y = p2.y;
+                top_left = p3;
+                bottom_right = vec2(p2.x, r.y + r.h);
+            } else {
+                p3.x = p2.x;
+                p3.y = p1.y;
+                top_left = p1;
+                bottom_right = vec2(p2.x, r.y + r.h);
+            }
+            dr_triangle(p1, p2, p3, area_col, 0);
+            dr_rect(.top_left=top_left, .bottom_right=bottom_right, .color=area_col, .color2={-1});
+            p1 = p2;
+        }
+    }
+
+    { // Draw lines:
+        F32 h = (cast(F64, array_get(&data->records, 0).value) / data->y_max) * r.h;
+        Vec2 p1 = { r.x + dot_size + container->content.x, r.y + r.h - h };
+
+        array_iter_from (record, &data->records, 1, *) {
+            F32 h   = (cast(F64, record->value) / data->y_max) * r.h;
+            Vec2 p2 = { p1.x + spacing + 2*dot_size, r.y + r.h - h };
+            dr_line(p1, p2, line_col, softness, line_thick);
+            p1 = p2;
+        }
+    }
+
+    { // Draw circles:
+        F32 x = r.x + dot_size + container->content.x;
+
+        array_iter (record, &data->records, *) {
+            F32 h = (cast(F64, record->value) / data->y_max) * r.h;
+            F32 y = r.y + r.h - h;
+            if (record == data->hovered) dr_circle(vec2(x, y), 1.5*dot_size, ui->theme->text_color_normal, softness);
+            dr_circle(vec2(x, y), dot_size, dot_col, softness);
+            x += spacing + 2*dot_size;
+        }
+    }
+}
+
+UiBox *ui_line_graph (String id, UiGraphData *data) {
+    UiBox *container = ui_scroll_box(id, true) {
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+
+        UiBox *inner = ui_box(UI_BOX_INVISIBLE_BG|UI_BOX_REACTIVE, "inner") {
+            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_CUSTOM, 0, 0});
+            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+            inner->draw_fn = draw_line_graph;
+            inner->size_fn = size_line_graph;
+            inner->scratch = cast(U64, data);
+        }
+    }
+
+    return container;
 }

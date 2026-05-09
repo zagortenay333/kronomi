@@ -126,6 +126,8 @@ istruct (View) {
             Seconds custom;
             Date heatmap_date;
             Map(String, Seconds) heatmap_data;
+            Date line_graph_date;
+            UiGraphData line_graph_data;
             Array(FilteredTrackerSlot) filtered_slots;
         } time_tracker;
     };
@@ -1558,6 +1560,28 @@ static Void compute_time_tracker_stats () {
             }
         }
     }
+
+    { // Compute line graph stats:
+        view->line_graph_data.records.count = 0;
+        Date date = view->line_graph_date;
+        date.day = 1;
+        while (os_is_date_ymd_valid(date)) {
+            UiGraphRecord *record = array_push_slot(&view->line_graph_data.records);
+            record->value = 0;
+
+            array_iter (it, &view->filtered_slots, *) {
+                TimeTrackerSlot *slot = array_ref(&context->tracker_slots, it->idx);
+
+                array_iter (t, &slot->time, *) {
+                    if (os_date_cmp(t->date, date) == 0) {
+                        record->value += t->seconds;
+                    }
+                }
+            }
+
+            date.day++;
+        }
+    } 
 }
 
 static Vec4 get_color_for_time (Seconds total) {
@@ -1588,14 +1612,14 @@ static Void build_heatmap () {
     U32 month_spacing = 10;
     U32 day_spacing = 2;
 
-    ui_box(0, "container") {
+    ui_box(0, "heatmap_graph") {
         ui_tag("card");
 
         F32 b = ui->theme->border_width.x;
         ui_style_vec2(UI_PADDING, vec2(b, b));
 
         ui_box(0, "header") {
-            ui_label(0, "label", str("Day totals"));
+            ui_label(0, "label", str("Day totals in year"));
             ui_hspacer();
             EventTag etag = ui->event->tag;
             I64 year = view->heatmap_date.year;
@@ -1692,6 +1716,57 @@ static Void build_heatmap () {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+static Void build_line_graph () {
+    tmem_new(tm);
+
+    assert_dbg(context->view.tag == VIEW_TIME_TRACKER);
+    Auto view = &context->view.time_tracker;
+
+    ui_box(UI_BOX_CLIPPING, "line_graph") {
+        ui_tag("card");
+
+        F32 b = ui->theme->border_width.x;
+        ui_style_vec2(UI_PADDING, vec2(b, b));
+
+        ui_box(0, "header") {
+            ui_label(0, "label", str("Day totals in month"));
+            ui_hspacer();
+
+            EventTag etag = ui->event->tag;
+
+            I64 year = view->line_graph_date.year;
+            UiBox *picker = ui_int_picker(str("picker"), &year, 0, 9999, 4);
+            view->line_graph_date.year = year;
+            picker->next_style.size.width.strictness = 1;
+
+            I64 month = view->line_graph_date.month;
+            UiBox *picker2 = ui_int_picker(str("picker2"), &month, 1, 12, 2);
+            view->line_graph_date.month = month;
+            picker2->next_style.size.width.strictness = 1;
+
+            if (ui->event->tag != etag) compute_time_tracker_stats();
+        }
+
+        ui_box(0, "graph") {
+            UiBox *graph = ui_line_graph(str("graph"), &view->line_graph_data);
+            ui_style_box_size(graph, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 1});
+            ui_style_box_size(graph, UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui->config->card_width/3, 1});
+
+            if (view->line_graph_data.hovered) {
+                U64 idx = 0;
+                array_iter (it, &view->line_graph_data.records, *) if (it == view->line_graph_data.hovered) { idx = ARRAY_IDX; break; }
+                Date date = view->line_graph_date;
+                date.day = idx + 1;
+                assert_always(date.day < 32);
+                String d = os_date_to_str(tm, date);
+                String t = time_to_str(tm, view->line_graph_data.hovered->value*1000);
+                String s = astr_fmt(tm, "%.*s %.*s", STR(d), STR(t));
+                ui_tooltip(str("tooltip")) ui_label(0, "label", s);
             }
         }
     }
@@ -1887,6 +1962,7 @@ static Void build_view_time_tracker () {
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 0});
 
             build_heatmap();
+            build_line_graph();
 
             { // Build totals table:
                 String ftoday  = time_to_str(tm, view->today*1000);
@@ -2392,8 +2468,11 @@ static Void execute_commands () {
             }
 
             context->view.time_tracker.heatmap_date = os_get_date();
+            context->view.time_tracker.line_graph_date = os_get_date();
             context->view.time_tracker.descending = true;
             array_init(&context->view.time_tracker.filtered_slots, context->view_mem);
+            array_init(&context->view.time_tracker.line_graph_data.records, context->view_mem);
+            context->view.time_tracker.line_graph_data.y_max = 24*60*60;
             map_init(&context->view.time_tracker.heatmap_data, context->view_mem);
         } break;
 

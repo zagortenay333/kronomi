@@ -3,6 +3,7 @@
 #include "base/core.h"
 #include "ui/ui.h"
 #include "buffer/buffer.h"
+#include "os/time.h"
 
 ienum (UiColorPickerMode, U8) {
     COLOR_PICKER_HEX,
@@ -17,10 +18,22 @@ ienum (UiTimePickerMode, U8) {
     TIME_PICKER_HMSM,
 };
 
+istruct (UiGraphRecord) {
+    U64 value;
+};
+
+istruct (UiGraphData) {
+    U64 y_max;
+    UiGraphRecord *hovered; // Set by widget. 0 if none.
+    ArrayU64 guidelines;
+    Array(UiGraphRecord) records;
+};
+
 UiBox *ui_hspacer              ();
 UiBox *ui_vspacer              ();
 UiBox *ui_label                (UiBoxFlags, CString id, String label);
 UiBox *ui_label_extra          (UiBoxFlags, CString id, String label, String font_path, F32 font_size, Bool monospace);
+UiBox *ui_line_graph           (String id, UiGraphData *);
 UiBox *ui_icon                 (UiBoxFlags, CString id, U32 icon);
 UiBox *ui_icon_button          (UiBoxFlags flags, CString id, U32 icon);
 UiBox *ui_checkbox             (CString id, Bool *val);

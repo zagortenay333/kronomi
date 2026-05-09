@@ -264,10 +264,12 @@ SliceVertex dr_rect_fn (RectAttributes *a) {
     Vertex *p = dr_reserve_vertices(6);
 
     F32 scale = win_get_display_scale();
-    a->radius.x            *= scale;
-    a->radius.y            *= scale;
-    a->radius.z            *= scale;
-    a->radius.w            *= scale;
+    if (a->text_is_grayscale >= 0) {
+        a->radius.x            *= scale;
+        a->radius.y            *= scale;
+        a->radius.z            *= scale;
+        a->radius.w            *= scale;
+    }
     a->border_widths.x     *= scale;
     a->border_widths.y     *= scale;
     a->border_widths.z     *= scale;
@@ -352,6 +354,22 @@ Void dr_triangle (Vec2 a, Vec2 b, Vec2 c, Vec4 color, F32 softness) {
 
     attr.text_is_grayscale = -2;
 
+    dr_rect_fn(&attr);
+}
+ 
+Void dr_circle (Vec2 c, F32 r, Vec4 color, F32 softness) {
+    RectAttributes attr = {};
+
+    attr.top_left     = vec2(c.x-r, c.y-r);
+    attr.bottom_right = vec2(c.x+r, c.y+r);
+
+    F32 s = win_get_display_scale();
+    attr.radius = vec4(r/s, r/s, r/s, r/s);
+
+    attr.color  = color;
+    attr.color2 = vec4(-1, 0, 0, 0);
+    attr.edge_softness = softness;
+    
     dr_rect_fn(&attr);
 }
 
