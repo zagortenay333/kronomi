@@ -76,6 +76,7 @@ istruct (View) {
 
     union {
         struct {
+            Date today;
             Bool has_filters;
             ArrayString filters;
             Array(KanbanColumn*) columns;
@@ -288,9 +289,9 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
     case MARKUP_AST_FILTER_PRIORITY: return (c->flags & MARKUP_AST_META_CONFIG_HAS_PRIORITY) && (cast(MarkupAstFilterPriority*, filter)->priority == c->priority);
     case MARKUP_AST_FILTER_DUE: {
         if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_DUE)) return false;
-        String filter_date_str = cast(MarkupAstFilterDue*, filter)->date;
-        if (! filter_date_str.data) return true;
-        Date filter_date = os_str_to_date(filter_date_str);
+        DateSpec filter_date_spec = cast(MarkupAstFilterDue*, filter)->date;
+        if (filter_date_spec.tag == DATE_SPEC_NONE) return true;
+        Date filter_date = os_resolve_date_spec(&filter_date_spec);
         Date task_date = os_str_to_date(c->due);
         switch (cast(MarkupAstFilterDue*, filter)->cmp) {
         case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
@@ -301,9 +302,9 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
     }
     case MARKUP_AST_FILTER_CREATED: {
         if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_CREATED)) return false;
-        String filter_date_str = cast(MarkupAstFilterCreated*, filter)->date;
-        if (! filter_date_str.data) return true;
-        Date filter_date = os_str_to_date(filter_date_str);
+        DateSpec filter_date_spec = cast(MarkupAstFilterCreated*, filter)->date;
+        if (filter_date_spec.tag == DATE_SPEC_NONE) return true;
+        Date filter_date = os_resolve_date_spec(&filter_date_spec);
         Date task_date = os_str_to_date(c->created);
         switch (cast(MarkupAstFilterCreated*, filter)->cmp) {
         case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
@@ -314,9 +315,9 @@ static Bool task_passes_filter_ (Task *task, MarkupAst *filter) {
     }
     case MARKUP_AST_FILTER_COMPLETED: {
         if (! (c->flags & MARKUP_AST_META_CONFIG_HAS_COMPLETED)) return false;
-        String filter_date_str = cast(MarkupAstFilterCompleted*, filter)->date;
-        if (! filter_date_str.data) return true;
-        Date filter_date = os_str_to_date(filter_date_str);
+        DateSpec filter_date_spec = cast(MarkupAstFilterCompleted*, filter)->date;
+        if (filter_date_spec.tag == DATE_SPEC_NONE) return true;
+        Date filter_date = os_resolve_date_spec(&filter_date_spec);
         Date task_date = os_str_to_date(c->completed);
         switch (cast(MarkupAstFilterCompleted*, filter)->cmp) {
         case MARKUP_CMP_EQUAL:   return os_date_cmp(task_date, filter_date) == 0;
@@ -2008,6 +2009,46 @@ static Void build_view_time_tracker () {
     }
 }
 
+static Void compute_kanban_columns () {
+    assert_dbg(context->view.tag == VIEW_MAIN);
+    Auto view = &context->view.main;
+
+    view->columns.count = 0;
+    view->filters.count = 0;
+
+    view->has_filters = false;
+    Deck *deck = get_active_deck();
+
+    if (deck) {
+        String s = buf_get_str(deck->filters, context->view_mem);
+        str_split(s, str(","), false, false, &view->filters);
+        if (s.count) {
+            view->has_filters = true;
+        } else {
+            array_push(&view->filters, str("* & !hide"));
+        }
+    }
+
+    array_iter (filter, &view->filters) {
+        MarkupAst *filter_node = markup_filter_parse(context->view_mem, filter);
+        KanbanColumn *col = mem_new(context->view_mem, KanbanColumn);
+        col->filter_text = filter;
+        col->filter_node = filter_node;
+        col->with_header = view->has_filters;
+        array_init(&col->tasks, context->view_mem);
+        array_push(&view->columns, col);
+    }
+
+    array_iter (task, &context->tasks) {
+        array_iter (column, &view->columns) {
+            if (task_passes_filter(task, column->filter_node)) {
+                array_push(&column->tasks, task);
+                break;
+            }
+        }
+    }
+}
+
 static Void build_view_main_compact () {
     Auto view = &context->view.main;
 
@@ -2131,6 +2172,14 @@ static Void build_view_main_sparse () {
 
 static Void build_view_main () {
     tmem_new(tm);
+
+    Auto view = &context->view.main;
+
+    Date d = os_get_date();
+    if (os_date_cmp(d, view->today) != 0) {
+        view->today = d; 
+        compute_kanban_columns();
+    }
 
     ui_box(0, "navbox") {
         ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
@@ -2406,40 +2455,11 @@ static Void execute_commands () {
 
             Auto view = &context->view.main;
 
+            view->today = os_get_date();
             array_init(&view->columns, context->view_mem);
             array_init(&view->filters, context->view_mem);
 
-            view->has_filters = false;
-            Deck *deck = get_active_deck();
-
-            if (deck) {
-                String s = buf_get_str(deck->filters, context->view_mem);
-                str_split(s, str(","), false, false, &view->filters);
-                if (s.count) {
-                    view->has_filters = true;
-                } else {
-                    array_push(&view->filters, str("* & !hide"));
-                }
-            }
-
-            array_iter (filter, &view->filters) {
-                MarkupAst *filter_node = markup_filter_parse(context->view_mem, filter);
-                KanbanColumn *col = mem_new(context->view_mem, KanbanColumn);
-                col->filter_text = filter;
-                col->filter_node = filter_node;
-                col->with_header = view->has_filters;
-                array_init(&col->tasks, context->view_mem);
-                array_push(&view->columns, col);
-            }
-
-            array_iter (task, &context->tasks) {
-                array_iter (column, &view->columns) {
-                    if (task_passes_filter(task, column->filter_node)) {
-                        array_push(&column->tasks, task);
-                        break;
-                    }
-                }
-            }
+            compute_kanban_columns();
         } break;
 
         case CMD_VIEW_SORT: {

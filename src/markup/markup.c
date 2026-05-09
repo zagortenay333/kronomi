@@ -533,6 +533,25 @@ static String try_parse_date (Parser *p) {
     return text;
 }
 
+static DateSpec try_parse_date_spec (Parser *p) {
+    DateSpec spec = {};
+    Token *t = lex_peek(p->lex);
+
+    if (str_match(t->text, str("today"))) {
+        spec.tag = DATE_SPEC_TODAY;
+        lex_eat(p->lex);
+    } else {
+        String ds = try_parse_date(p);
+        Date d = os_str_to_date(ds);
+        if (os_is_date_ymd_valid(d)) {
+            spec.tag = DATE_SPEC_SPECIFIC;
+            spec.date = d;
+        }
+    }
+
+    return spec;
+}
+
 static Bool is_meta_config_delimiter (Parser *p, Token *token) {
     TokenTag t = token->tag;
     return t == ']' || t == '\n' || t == TOKEN_EOF || t == TOKEN_SPACES;
@@ -758,7 +777,7 @@ static MarkupAst *parse_filter_due (Parser *p) {
         cast(MarkupAstFilterDue*, node)->cmp = MARKUP_CMP_GREATER;
     }
     lex_try_eat(p->lex, TOKEN_SPACES);
-    cast(MarkupAstFilterDue*, node)->date = try_parse_date(p);
+    cast(MarkupAstFilterDue*, node)->date = try_parse_date_spec(p);
     return complete_node(p, node);
 }
 
@@ -772,7 +791,7 @@ static MarkupAst *parse_filter_created (Parser *p) {
         cast(MarkupAstFilterCreated*, node)->cmp = MARKUP_CMP_GREATER;
     }
     lex_try_eat(p->lex, TOKEN_SPACES);
-    cast(MarkupAstFilterCreated*, node)->date = try_parse_date(p);
+    cast(MarkupAstFilterCreated*, node)->date = try_parse_date_spec(p);
     return complete_node(p, node);
 }
 
@@ -786,7 +805,7 @@ static MarkupAst *parse_filter_completed (Parser *p) {
         cast(MarkupAstFilterCompleted*, node)->cmp = MARKUP_CMP_GREATER;
     }
     lex_try_eat(p->lex, TOKEN_SPACES);
-    cast(MarkupAstFilterCompleted*, node)->date = try_parse_date(p);
+    cast(MarkupAstFilterCompleted*, node)->date = try_parse_date_spec(p);
     return complete_node(p, node);
 }
 

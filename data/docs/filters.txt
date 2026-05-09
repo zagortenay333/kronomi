@@ -51,26 +51,17 @@ Here are all the operands:
 | due
   due 2000-01-01
   due > 2000-01-01
-  due \< 2000-01-01
+  due \< today
 | If no date is provided, it evals true if task
   has any due date. Else, it evals true if task
-  has a date that matches the filter.
+  has a date that matches the filter which can be
+  a specific date or the keyword `today`.
 |-------------------------------------------------
-| created
-  created 2000-01-01
-  created > 2000-01-01
-  created \< 2000-01-01
-| If no date is provided, it evals true if task
-  has any created date. Else, it evals true if
-  task has a date that matches the filter.
+| created `filter`
+| Same as due date except refering to crated date.
 |-------------------------------------------------
-| completed
-  completed 2000-01-01
-  completed > 2000-01-01
-  completed \< 2000-01-01
-| If no date is provided, it evals true if task
-  has any completed date. Else, it evals true if
-  task has a date that matches the filter.
+| completed `filter`
+| Same as due date except refering to completed date.
 |-------------------------------------------------
 | pin
 | Evals to true if task is pinned.

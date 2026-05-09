@@ -63,3 +63,12 @@ Date os_str_to_date (String s) {
     if (! os_is_date_ymd_valid(date)) date.month = 0;
     return date;
 }
+
+Date os_resolve_date_spec (DateSpec *spec) {
+    switch (spec->tag) {
+    case DATE_SPEC_NONE: return (Date){};
+    case DATE_SPEC_TODAY: return os_get_date();
+    case DATE_SPEC_SPECIFIC: return spec->date;
+    }
+    badpath;
+}

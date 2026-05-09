@@ -3,6 +3,7 @@
 #include "base/core.h"
 #include "base/log.h"
 #include "base/map.h"
+#include "os/time.h"
 
 // X(tag, type)
 #define EACH_MARKUP_AST_NODE(X)\
@@ -151,9 +152,9 @@ istruct (MarkupAstFilterNot)       { MarkupAst base; };
 istruct (MarkupAstFilterOr)        { MarkupAst base; };
 istruct (MarkupAstFilterAnd)       { MarkupAst base; };
 istruct (MarkupAstFilterAny)       { MarkupAst base; };
-istruct (MarkupAstFilterDue)       { MarkupAst base; MarkupCmp cmp; String date; };
-istruct (MarkupAstFilterCreated)   { MarkupAst base; MarkupCmp cmp; String date; };
-istruct (MarkupAstFilterCompleted) { MarkupAst base; MarkupCmp cmp; String date; };
+istruct (MarkupAstFilterDue)       { MarkupAst base; MarkupCmp cmp; DateSpec date; };
+istruct (MarkupAstFilterCreated)   { MarkupAst base; MarkupCmp cmp; DateSpec date; };
+istruct (MarkupAstFilterCompleted) { MarkupAst base; MarkupCmp cmp; DateSpec date; };
 istruct (MarkupAstFilterDone)      { MarkupAst base; };
 istruct (MarkupAstFilterPin)       { MarkupAst base; };
 istruct (MarkupAstFilterHide)      { MarkupAst base; };
