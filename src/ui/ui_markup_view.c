@@ -272,7 +272,7 @@ static UiBox *build_paragraph (MarkupView *info, MarkupAst *node) {
 
     String id = astr_fmt(tm, "block%lu", array_get_last(&ui->box_stack)->children.count);
     if (info->purge_cache) ui_free_box_data(ui_build_key(id));
-    UiBox *box = ui_text_view(UI_BOX_REACTIVE, id, ctx->raw_text.as_slice, font_size, ctx->ranges.as_slice);
+    UiBox *box = ui_text_view(UI_BOX_REACTIVE, id, ctx->raw_text.as_slice, font_size, !info->inside_raw_block, ctx->ranges.as_slice);
     ui_tag_box(box, "block");
     ui_tag_box(box, "paragraph");
 

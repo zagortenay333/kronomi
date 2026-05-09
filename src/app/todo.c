@@ -1873,7 +1873,7 @@ static Void build_view_time_tracker () {
                             ui_tag("press");
                             ui_popup(str("popup"), &opened, false, preview_button) {
                                 String text = markup_ast_get_text(context->tracked_task->ast, context->tracked_task->text);
-                                ui_text_view(0, str("text"), text, ui->config->font_size, (SliceUiMarkupRange){});
+                                ui_text_view(0, str("text"), text, ui->config->font_size, true, (SliceUiMarkupRange){});
                             }
                         }
                         preview_button->scratch = opened;
@@ -1999,7 +1999,7 @@ static Void build_view_time_tracker () {
                     }
 
                     ui_box(0, "body") {
-                        ui_text_view(0, str("text"), slot->task_str, ui->config->font_size, (SliceUiMarkupRange){});
+                        ui_text_view(0, str("text"), slot->task_str, ui->config->font_size, true, (SliceUiMarkupRange){});
                     }
                 }
             }

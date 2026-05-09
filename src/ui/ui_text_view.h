@@ -31,6 +31,6 @@ array_typedef(UiMarkupRange, UiMarkupRange);
 
 extern UiMarkup default_markup;
 
-UiBox *ui_text_view                 (UiBoxFlags, String id, String text, F32 font_size, SliceUiMarkupRange);
+UiBox *ui_text_view                 (UiBoxFlags, String id, String text, F32 font_size, Bool, SliceUiMarkupRange);
 U64    ui_text_view_coord_to_offset (UiBox *box, Vec2 coord);
 Void   ui_markup_flatten_ranges     (String, SliceUiMarkupRange, ArrayUiMarkupRange *);

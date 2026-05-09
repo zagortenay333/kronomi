@@ -372,7 +372,7 @@ static String copy_normalized (UiTextView *info, String text) {
     return astr_to_str(&a);
 }
 
-UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, SliceUiMarkupRange markup_ranges) {
+UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, Bool soft_newline, SliceUiMarkupRange markup_ranges) {
     UiBox *container = ui_box_str(flags, id) {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_CUSTOM, 1, 1});
@@ -384,14 +384,14 @@ UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, Sl
 
         if (! info->text.data) {
             info->font_size = font_size;
-            info->text = copy_normalized(info, text);
+            info->text = soft_newline ? copy_normalized(info, text) : str_copy(info->header.mem, text);
             array_init(&info->markup, info->header.mem);
             array_init(&info->styled_glyphs, info->header.mem);
             array_init(&info->lines, info->header.mem);
             compute_glyphs(info, markup_ranges);
         } else if (font_size != info->font_size || !str_match(text, info->text)) {
             info->font_size = font_size;
-            info->text = copy_normalized(info, text);
+            info->text = soft_newline ? copy_normalized(info, text) : str_copy(info->header.mem, text);
             info->markup.count = 0;
             info->styled_glyphs.count = 0;
             info->viewport_width = 0;
