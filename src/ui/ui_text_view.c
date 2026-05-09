@@ -352,6 +352,26 @@ static Void draw (UiBox *box) {
     box->rect.h = current_y_offset;
 }
 
+// Replace lonely newline characters with a space.
+static String copy_normalized (UiTextView *info, String text) {
+    AString a = astr_new(info->header.mem);
+    array_ensure_capacity_min(&a, text.count);
+
+    array_iter (c, &text) {
+        if (c != '\n') {
+            astr_push_byte(&a, c);
+        } else if (ARRAY_ITER_DONE) {
+            break;
+        } else if (text.data[ARRAY_IDX+1] == '\n') {
+            astr_push_byte(&a, c);
+        } else {
+            astr_push_byte(&a, ' ');
+        }
+    }
+
+    return astr_to_str(&a);
+}
+
 UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, SliceUiMarkupRange markup_ranges) {
     UiBox *container = ui_box_str(flags, id) {
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
@@ -364,14 +384,14 @@ UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, Sl
 
         if (! info->text.data) {
             info->font_size = font_size;
-            info->text = str_copy(info->header.mem, text);
+            info->text = copy_normalized(info, text);
             array_init(&info->markup, info->header.mem);
             array_init(&info->styled_glyphs, info->header.mem);
             array_init(&info->lines, info->header.mem);
             compute_glyphs(info, markup_ranges);
         } else if (font_size != info->font_size || !str_match(text, info->text)) {
             info->font_size = font_size;
-            info->text = str_copy(info->header.mem, text);
+            info->text = copy_normalized(info, text);
             info->markup.count = 0;
             info->styled_glyphs.count = 0;
             info->viewport_width = 0;
