@@ -348,8 +348,7 @@ Void dr_circle (Vec2 c, F32 r, Vec4 color, F32 softness) {
     attr.top_left     = vec2(c.x-r, c.y-r);
     attr.bottom_right = vec2(c.x+r, c.y+r);
 
-    F32 s = win_get_display_scale();
-    attr.radius = vec4(r/s, r/s, r/s, r/s);
+    attr.radius = vec4(r, r, r, r);
 
     attr.color  = color;
     attr.color2 = vec4(-1, 0, 0, 0);
