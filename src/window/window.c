@@ -17,6 +17,7 @@ istruct (Sound) {
 #define VERTEX_MAX_BATCH_SIZE 2400
 
 Bool running = true;
+F32 prev_scale;
 
 SDL_Window *window;
 SDL_GLContext gl_ctx;
@@ -262,22 +263,6 @@ static Void draw_rect_vertex (Vertex *v, Vec2 pos, Vec2 uv, Vec4 color, RectAttr
 
 SliceVertex dr_rect_fn (RectAttributes *a) {
     Vertex *p = dr_reserve_vertices(6);
-
-    F32 scale = win_get_display_scale();
-    if (a->text_is_grayscale >= 0) {
-        a->radius.x            *= scale;
-        a->radius.y            *= scale;
-        a->radius.z            *= scale;
-        a->radius.w            *= scale;
-    }
-    a->border_widths.x     *= scale;
-    a->border_widths.y     *= scale;
-    a->border_widths.z     *= scale;
-    a->border_widths.w     *= scale;
-    a->inset_shadow_width  *= scale;
-    a->outset_shadow_width *= scale;
-    a->shadow_offsets.x    *= scale;
-    a->shadow_offsets.y    *= scale;
 
     if (a->color2.x == -1.0) a->color2 = a->color;
 
@@ -740,6 +725,10 @@ static Void process_event (SDL_Event *event, Bool *running) {
     case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
         Auto e = array_push_slot(&events);
         e->tag = EVENT_DUMMY;
+        F32 s = win_get_display_scale();
+        ui_scale(1/prev_scale);
+        ui_scale(s);
+        prev_scale = s;
     } break;
 
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
@@ -829,6 +818,7 @@ Void win_init (CString title) {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
 
+    prev_scale = win_get_display_scale();
     for (U32 c = SDL_SYSTEM_CURSOR_DEFAULT; c < SDL_SYSTEM_CURSOR_COUNT; ++c) {
         cursors[c] = SDL_CreateSystemCursor(c);
     }

@@ -171,6 +171,9 @@ Void app_config_save () {
 
     AString astr = astr_new(tm);
 
+    F32 s = win_get_display_scale();
+    ui_scale(1/s);
+
     astr_push_fmt(&astr, "version = %lu\n", app->config_version);
     astr_push_fmt(&astr, "icon_size = %.2f\n", app->ui_config.icon_size);
     astr_push_fmt(&astr, "font_size = %.2f\n", app->ui_config.font_size);
@@ -235,6 +238,7 @@ Void app_config_save () {
     #undef V4
 
     fs_write_entire_file(app->theme_file_path, astr_to_str(&astr));
+    ui_scale(s);
 }
 
 static Void load_config () {
@@ -272,6 +276,7 @@ static Void load_config () {
     app->ui_config.blur_strength    = config_get_f64(cfg, cfg->root, "blur_strength");
 
     app_load_ui_theme(app->theme_file_path);
+    ui_scale(win_get_display_scale());
 }
 
 static Void build_global_style_rules () {

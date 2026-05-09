@@ -119,7 +119,6 @@ AtlasSlot *font_get_atlas_slot (Font *font, GlyphInfo *info) {
 
 static Font *font_new (FontCache *cache, String filepath, U32 size) {
     Mem *mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    size = size * win_get_display_scale();
 
     Auto font = mem_new(mem, Font);
 
@@ -185,12 +184,11 @@ static Void font_free (FontCache *cache, Font *font) {
 
 Font *font_get (FontCache *cache, String filepath, U32 size) {
     if (size == 0) size = 12;
-    U32 scaled_size = size * win_get_display_scale();
 
     Font *font = 0;
 
     array_iter (it, &cache->fonts) {
-        if (str_match(it->filepath, filepath) && it->size == scaled_size) {
+        if (str_match(it->filepath, filepath) && it->size == size) {
             font = it;
             break;
         }

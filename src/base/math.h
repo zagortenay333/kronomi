@@ -62,6 +62,7 @@ Vec2 mul_f32_v2   (F32, Vec2);
 Vec2 normalize_v2 (Vec2);
 
 Vec4 lerp_v4      (Vec4, Vec4, F32);
+Vec4 mul_f32_v4   (F32, Vec4);
 
 // =============================================================================
 // Matrices:
@@ -87,6 +88,7 @@ Void print_m4        (Mat4, AString *, CString prefix, CString suffix);
 #define mul(a, b) typematch2(a, b,\
     Void(*)(Mat4, Mat4): mul_m4,\
     Void(*)(Vec3, Vec3): mul_v3_v3,\
+    Void(*)(F32,  Vec4): mul_f32_v4,\
     Void(*)(F32,  Vec3): mul_f32_v3,\
     Void(*)(F32,  Vec2): mul_f32_v2\
 )(a, b)

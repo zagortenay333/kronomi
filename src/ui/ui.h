@@ -36,12 +36,10 @@ istruct (UiTheme) {
     Vec4 in_shadow_color;
     F32 out_shadow_width;
     Vec4 out_shadow_color;
-
     Vec4 bg_titlebar;
     Vec2 padding_titlebar;
     F32 radius_titlebar;
     Vec4 border_color_titlebar;
-
     Vec4 text_color_normal;
     Vec4 text_color_faint;
     Vec4 text_color_inactive;
@@ -377,7 +375,9 @@ istruct (Ui) {
 extern Ui *ui;
 
 Void   ui_init             (UiConfig *, UiTheme *);
+F32    ui_em               (F32);
 Void   ui_frame            (Void(*)(), F64 dt);
+Void   ui_scale            (F32);
 Void   ui_set_mouse_cursor (MouseCursor);
 Void   ui_eat_event        ();
 Void   ui_grab_focus       (UiBox *);

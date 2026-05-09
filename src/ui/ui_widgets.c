@@ -298,7 +298,7 @@ UiBox *ui_icon_button (UiBoxFlags flags, CString id, U32 icon) {
 
 UiBox *ui_checkbox (CString id, Bool *val) {
     UiBox *bg = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, id) {
-        F32 s = 20;
+        F32 s = 1.8 * ui->config->font_size;
 
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, s, 1});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, s, 1});
@@ -378,14 +378,12 @@ UiBox *ui_image (String id, Texture *texture, Bool blur, Vec4 tint, F32 pref_wid
 }
 
 UiBox *ui_toggle (CString id, Bool *val) {
-    F32 scale = win_get_display_scale();
-
     UiBox *bg = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, id) {
-        F32 s = 24.0 * scale;
+        F32 s = 2 * ui->config->font_size;
 
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 2*s, 1});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, s, 1});
-        ui_style_vec4(UI_RADIUS, vec4(s/2/scale, s/2/scale, s/2/scale, s/2/scale));
+        ui_style_vec4(UI_RADIUS, vec4(s/2, s/2, s/2, s/2));
         ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z1);
         ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color);
         ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width);
@@ -411,13 +409,13 @@ UiBox *ui_toggle (CString id, Bool *val) {
         }
 
         ui_box(UI_BOX_CLICK_THROUGH, "toggle_knob") {
-            F32 ks = 16.0 * scale;
+            F32 ks = 1.4 * ui->config->font_size;
             ui_style_f32(UI_EDGE_SOFTNESS, 1.3);
-            ui_style_f32(UI_FLOAT_X, *val ? (2*s - ks - 4*scale) : 4*scale);
-            ui_style_f32(UI_FLOAT_Y, 4*scale);
+            ui_style_f32(UI_FLOAT_X, *val ? (2*s - ks - ks/4) : ks/4);
+            ui_style_f32(UI_FLOAT_Y, ks/4);
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ks, 1});
             ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ks, 1});
-            ui_style_vec4(UI_RADIUS, vec4(ks/2/scale, ks/2/scale, ks/2/scale, ks/2/scale));
+            ui_style_vec4(UI_RADIUS, vec4(ks/2, ks/2, ks/2, ks/2));
             ui_style_vec4(UI_BG_COLOR, ui->theme->slider_knob_color);
             ui_style_f32(UI_OUTSET_SHADOW_WIDTH, ui->theme->out_shadow_width);
             ui_style_vec4(UI_OUTSET_SHADOW_COLOR, ui->theme->out_shadow_color);
@@ -985,7 +983,7 @@ UiBox *ui_dropdown (String id, U64 *selection, SliceString options) {
                         ui_style_vec4(UI_BG_COLOR2, vec4(-1, 0, 0, 0));
                         ui_style_vec4(UI_BORDER_COLOR, vec4(0, 0, 0, 0));
                         ui_style_f32(UI_OUTSET_SHADOW_WIDTH, 0);
-                        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 200, 1});
+                        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(16.6), 1});
 
                         if (button->signals.hovered) {
                             ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
@@ -1158,7 +1156,7 @@ UiBox *ui_slider_str (String label, F32 *val) {
     UiBox *container = ui_box_str(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, label) {
         ui_tag("slider");
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 20, 1});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(2), 1});
         ui_style_f32(UI_EDGE_SOFTNESS, 0);
         ui_style_f32(UI_SPACING, 0);
         ui_style_u32(UI_ALIGN_Y, UI_ALIGN_MIDDLE);
@@ -1195,7 +1193,7 @@ UiBox *ui_slider_str (String label, F32 *val) {
         ui_box(UI_BOX_CLICK_THROUGH, "slider_track") {
             ui_style_f32(UI_FLOAT_X, 0);
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 4, 0});
+            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(.33), 0});
             ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
             ui_style_f32(UI_EDGE_SOFTNESS, 0);
 
@@ -1207,14 +1205,14 @@ UiBox *ui_slider_str (String label, F32 *val) {
             }
         }
 
-        F32 knob_size = max(8, container->rect.h - 8);
+        F32 knob_size = max(ui_em(.66), container->rect.h - ui_em(.66));
 
         ui_box(UI_BOX_CLICK_THROUGH|UI_BOX_INVISIBLE_BG, "slider_spacer") {
             F32 spacer_width = max(0, *val - knob_size/(2*max(knob_size, container->rect.w)));
             assert_dbg(spacer_width <= 1.0);
             assert_dbg(spacer_width >= 0.0);
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, spacer_width, 0});
-            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 2, 0});
+            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(.166), 0});
         }
 
         ui_box(UI_BOX_CLICK_THROUGH, "slider_knob") {
@@ -1294,8 +1292,8 @@ UiBox *ui_color_sat_val_picker (String id, F32 hue, F32 *sat, F32 *val) {
         data->val = *val;
         container->scratch = cast(U64, data);
         container->draw_fn = draw_color_sat_val_picker;
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 200, 0});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 200, 0});
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(16.66), 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(16.66), 0});
 
         if (container->signals.clicked || (container->signals.pressed && ui->event->tag == EVENT_MOUSE_MOVE)) {
             *sat = (ui->mouse.x - container->rect.x) / container->rect.w;
@@ -1348,8 +1346,8 @@ UiBox *ui_color_hue_picker (String id, F32 *hue) {
     UiBox *container = ui_box_str(UI_BOX_REACTIVE, id) {
         container->draw_fn = draw_color_hue_picker;
         container->scratch_f32 = *hue;
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 20, 1});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 200, 0});
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(1.8), 1});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(16.66), 0});
 
         if (container->signals.clicked || (container->signals.pressed && ui->event->tag == EVENT_MOUSE_MOVE)) {
             *hue = (ui->mouse.y - container->rect.y) / container->rect.h;
@@ -1393,8 +1391,8 @@ UiBox *ui_color_alpha_picker (String id, F32 *alpha) {
     UiBox *container = ui_box_str(UI_BOX_REACTIVE, id) {
         container->draw_fn = draw_color_alpha_picker;
         container->scratch_f32 = *alpha;
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 20, 1});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 200, 0});
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(1.8), 1});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(16.66), 0});
 
         if (container->signals.clicked || (container->signals.pressed && ui->event->tag == EVENT_MOUSE_MOVE)) {
             *alpha = (ui->mouse.y - container->rect.y) / container->rect.h;
@@ -1515,8 +1513,8 @@ UiBox *ui_color_picker_button (String id, F32 *h, F32 *s, F32 *v, F32 *a) {
                     ui_style_vec2(UI_PADDING, vec2(16.0, 16));
                     ui_style_f32(UI_SPACING, 10.0);
                     ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-                    ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 250, 1});
-                    ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 350, 1});
+                    ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(20.8), 1});
+                    ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(29.16), 1});
 
                     ui_box(0, "graphical_pickers") {
                         ui_style_f32(UI_SPACING, 8.0);
@@ -1525,7 +1523,7 @@ UiBox *ui_color_picker_button (String id, F32 *h, F32 *s, F32 *v, F32 *a) {
                         ui_color_alpha_picker(str("alpha"), a);
                     }
 
-                    ui_box(UI_BOX_INVISIBLE_BG, "spacer") ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 10, 1});
+                    ui_box(UI_BOX_INVISIBLE_BG, "spacer") ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(.8), 1});
 
                     ui_box(0, "hex_picker") {
                         ui_style_u32(UI_ALIGN_Y, UI_ALIGN_MIDDLE);

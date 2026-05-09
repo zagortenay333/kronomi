@@ -18,6 +18,8 @@ String settings_view_get_title (UiViewInstance *view, Bool visible) {
 }
 
 static Void build_global_settings () {
+    F32 s = win_get_display_scale();
+
     UiBox *title = ui_label_extra(0, "global_settings", str("Global settings"), ui->config->font_path_normal, 1.25*ui->config->font_size, false);
     ui_style_box_size(title, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 30*ui->config->font_size, 1});
 
@@ -29,20 +31,20 @@ static Void build_global_settings () {
             ui_tag("row");
             ui_label(0, "title", str("Icon size"));
             ui_hspacer();
-            F64 val = ui->config->icon_size;
+            F64 val = ui->config->icon_size/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->config->icon_size = val;
+            ui->config->icon_size = val*s;
         }
 
         ui_box(0, "font_size") {
             ui_tag("row");
             ui_label(0, "title", str("Font size"));
             ui_hspacer();
-            F64 val = ui->config->font_size;
+            F64 val = ui->config->font_size/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->config->font_size = val;
+            ui->config->font_size = val*s;
         }
 
         ui_box(0, "font_path_normal") {
@@ -119,10 +121,10 @@ static Void build_global_settings () {
             UiBox *info_button = ui_button_info_popup(str("info_button"), false, info, false);
             info_button->next_style.size.width.strictness = 1;
 
-            I64 val = ui->config->card_width;
+            I64 val = ui->config->card_width/s;
             UiBox *picker = ui_int_picker(str("picker"), &val, 0, INT64_MAX, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->config->card_width = val;
+            ui->config->card_width = val*s;
         }
 
         ui_box(0, "animation_time") {
@@ -137,7 +139,7 @@ static Void build_global_settings () {
 
         ui_box(0, "tab_width") {
             ui_tag("row");
-            ui_label(0, "title", str("Tab width"));
+            ui_label(0, "title", str("Tab width (in spaces)"));
             ui_hspacer();
             I64 val = ui->config->tab_width;
             UiBox *picker = ui_int_picker(str("picker"), &val, 0, INT64_MAX, 4);
@@ -149,20 +151,20 @@ static Void build_global_settings () {
             ui_tag("row");
             ui_label(0, "title", str("Line spacing"));
             ui_hspacer();
-            F64 val = ui->config->line_spacing;
+            F64 val = ui->config->line_spacing/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->config->line_spacing = val;
+            ui->config->line_spacing = val*s;
         }
 
         ui_box(0, "scrollbar_width") {
             ui_tag("row");
             ui_label(0, "title", str("Scrollbar width"));
             ui_hspacer();
-            F64 val = ui->config->scrollbar_width;
+            F64 val = ui->config->scrollbar_width/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->config->scrollbar_width = val;
+            ui->config->scrollbar_width = val*s;
         }
 
         ui_box(0, "blur_strength") {
@@ -178,6 +180,7 @@ static Void build_global_settings () {
 }
 
 static Void build_window_settings () {
+    F32 s = win_get_display_scale();
     UiBox *title = ui_label_extra(0, "window_settings", str("Window settings"), ui->config->font_path_normal, 1.25*ui->config->font_size, false);
     ui_style_box_size(title, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 30*ui->config->font_size, 1});
 
@@ -223,13 +226,13 @@ static Void build_window_settings () {
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
                 box->next_style.size.width.strictness = 1;
 
-                F64 val = ui->theme->padding_titlebar.x;
+                F64 val = ui->theme->padding_titlebar.x/s;
                 ui_f64_picker(str("picker1"), &val, 0, INFINITY, 3);
-                ui->theme->padding_titlebar.x = val;
+                ui->theme->padding_titlebar.x = val*s;
 
-                val = ui->theme->padding_titlebar.y;
+                val = ui->theme->padding_titlebar.y/s;
                 ui_f64_picker(str("picker2"), &val, 0, INFINITY, 3);
-                ui->theme->padding_titlebar.y = val;
+                ui->theme->padding_titlebar.y = val*s;
             }
         }
 
@@ -237,10 +240,10 @@ static Void build_window_settings () {
             ui_tag("row");
             ui_label(0, "title", str("Corner radius"));
             ui_hspacer();
-            F64 val = ui->theme->radius_titlebar;
+            F64 val = ui->theme->radius_titlebar/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->theme->radius_titlebar = val;
+            ui->theme->radius_titlebar = val*s;
         }
     }
 }
@@ -263,7 +266,7 @@ static UiBox *build_theme_presets_picker (String id) {
                         ui_style_vec4(UI_BORDER_COLOR, vec4(0, 0, 0, 0));
                         ui_style_vec4(UI_BG_COLOR2, vec4(-1, 0, 0, 0));
                         ui_style_f32(UI_OUTSET_SHADOW_WIDTH, 0);
-                        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 200, 1});
+                        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(16), 1});
                         if (button->signals.hovered) ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
 
                         String label = str_cut_suffix(it->current_file_name, str(".txt"));
@@ -308,6 +311,7 @@ static UiBox *build_theme_presets_picker (String id) {
 }
 
 static Void build_theme_settings () {
+    F32 s = win_get_display_scale();
     UiBox *title = ui_label_extra(0, "theme_settings", str("Theme"), ui->config->font_path_normal, 1.25*ui->config->font_size, false);
     ui_style_box_size(title, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 30*ui->config->font_size, 1});
 
@@ -341,10 +345,10 @@ static Void build_theme_settings () {
             ui_tag("row");
             ui_label(0, "title", str("Spacing"));
             ui_hspacer();
-            F64 val = ui->theme->spacing;
+            F64 val = ui->theme->spacing/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->theme->spacing = val;
+            ui->theme->spacing = val*s;
         }
 
         ui_box(0, "padding") {
@@ -355,13 +359,13 @@ static Void build_theme_settings () {
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
                 box->next_style.size.width.strictness = 1;
 
-                F64 val = ui->theme->padding.x;
+                F64 val = ui->theme->padding.x/s;
                 ui_f64_picker(str("picker1"), &val, 0, INFINITY, 3);
-                ui->theme->padding.x = val;
+                ui->theme->padding.x = val*s;
 
-                val = ui->theme->padding.y;
+                val = ui->theme->padding.y/s;
                 ui_f64_picker(str("picker2"), &val, 0, INFINITY, 3);
-                ui->theme->padding.y = val;
+                ui->theme->padding.y = val*s;
             }
         }
 
@@ -373,21 +377,21 @@ static Void build_theme_settings () {
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
                 box->next_style.size.width.strictness = 1;
 
-                F64 val = ui->theme->radius.x;
+                F64 val = ui->theme->radius.x/s;
                 ui_f64_picker(str("picker1"), &val, 0, INFINITY, 3);
-                ui->theme->radius.x = val;
+                ui->theme->radius.x = val*s;
 
-                val = ui->theme->radius.y;
+                val = ui->theme->radius.y/s;
                 ui_f64_picker(str("picker2"), &val, 0, INFINITY, 3);
-                ui->theme->radius.y = val;
+                ui->theme->radius.y = val*s;
 
-                val = ui->theme->radius.z;
+                val = ui->theme->radius.z/s;
                 ui_f64_picker(str("picker3"), &val, 0, INFINITY, 3);
-                ui->theme->radius.z = val;
+                ui->theme->radius.z = val*s;
 
-                val = ui->theme->radius.w;
+                val = ui->theme->radius.w/s;
                 ui_f64_picker(str("picker4"), &val, 0, INFINITY, 3);
-                ui->theme->radius.w = val;
+                ui->theme->radius.w = val*s;
             }
         }
 
@@ -402,21 +406,21 @@ static Void build_theme_settings () {
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
                 box->next_style.size.width.strictness = 1;
 
-                F64 val = ui->theme->border_width.x;
+                F64 val = ui->theme->border_width.x/s;
                 ui_f64_picker(str("picker1"), &val, 0, INFINITY, 3);
-                ui->theme->border_width.x = val;
+                ui->theme->border_width.x = val*s;
 
-                val = ui->theme->border_width.y;
+                val = ui->theme->border_width.y/s;
                 ui_f64_picker(str("picker2"), &val, 0, INFINITY, 3);
-                ui->theme->border_width.y = val;
+                ui->theme->border_width.y = val*s;
 
-                val = ui->theme->border_width.z;
+                val = ui->theme->border_width.z/s;
                 ui_f64_picker(str("picker3"), &val, 0, INFINITY, 3);
-                ui->theme->border_width.z = val;
+                ui->theme->border_width.z = val*s;
 
-                val = ui->theme->border_width.w;
+                val = ui->theme->border_width.w/s;
                 ui_f64_picker(str("picker4"), &val, 0, INFINITY, 3);
-                ui->theme->border_width.w = val;
+                ui->theme->border_width.w = val*s;
             }
         }
 
@@ -428,21 +432,21 @@ static Void build_theme_settings () {
                 ui_style_f32(UI_SPACING, ui->theme->spacing);
                 box->next_style.size.width.strictness = 1;
 
-                F64 val = ui->theme->border_width_focus.x;
+                F64 val = ui->theme->border_width_focus.x/s;
                 ui_f64_picker(str("picker1"), &val, 0, INFINITY, 3);
-                ui->theme->border_width_focus.x = val;
+                ui->theme->border_width_focus.x = val*s;
 
-                val = ui->theme->border_width_focus.y;
+                val = ui->theme->border_width_focus.y/s;
                 ui_f64_picker(str("picker2"), &val, 0, INFINITY, 3);
-                ui->theme->border_width_focus.y = val;
+                ui->theme->border_width_focus.y = val*s;
 
-                val = ui->theme->border_width_focus.z;
+                val = ui->theme->border_width_focus.z/s;
                 ui_f64_picker(str("picker3"), &val, 0, INFINITY, 3);
-                ui->theme->border_width_focus.z = val;
+                ui->theme->border_width_focus.z = val*s;
 
-                val = ui->theme->border_width_focus.w;
+                val = ui->theme->border_width_focus.w/s;
                 ui_f64_picker(str("picker4"), &val, 0, INFINITY, 3);
-                ui->theme->border_width_focus.w = val;
+                ui->theme->border_width_focus.w = val*s;
             }
         }
 
@@ -450,10 +454,10 @@ static Void build_theme_settings () {
             ui_tag("row");
             ui_label(0, "title", str("Inset shadow width"));
             ui_hspacer();
-            F64 val = ui->theme->in_shadow_width;
+            F64 val = ui->theme->in_shadow_width/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->theme->in_shadow_width = val;
+            ui->theme->in_shadow_width = val*s;
         }
 
         build_color_picker(in_shadow_color, "Inset shadow color");
@@ -462,10 +466,10 @@ static Void build_theme_settings () {
             ui_tag("row");
             ui_label(0, "title", str("Outset shadow width"));
             ui_hspacer();
-            F64 val = ui->theme->out_shadow_width;
+            F64 val = ui->theme->out_shadow_width/s;
             UiBox *picker = ui_f64_picker(str("picker"), &val, 0, INFINITY, 4);
             picker->next_style.size.width.strictness = 1;
-            ui->theme->out_shadow_width = val;
+            ui->theme->out_shadow_width = val*s;
         }
 
         build_color_picker(out_shadow_color, "Outset shadow color");
@@ -503,9 +507,7 @@ Void settings_view_build (UiViewInstance *view, Bool visible) {
 
         EventTag event_tag = ui->event->tag;
 
-        ui_style_rule(".row") {
-            ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
-        }
+        ui_style_rule(".row") ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
 
         build_global_settings();
         build_window_settings();

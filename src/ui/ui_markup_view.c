@@ -439,7 +439,7 @@ static Void build_block (MarkupView *info, MarkupAst *node) {
             ui_tag("block");
             ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 2, 1});
+            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(.16), 1});
             ui_style_f32(UI_EDGE_SOFTNESS, 0);
         }
     } break;

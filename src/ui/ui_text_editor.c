@@ -732,7 +732,7 @@ UiBox *ui_ted_resizable (String id, Buf *buf, F32 *width, F32 *height, UiTextEdi
 
     ui_parent(text_box) {
         UiBox *resizer = ui_box(UI_BOX_REACTIVE, "resizer") {
-            F32 w = 10;
+            F32 w = ui_em(1);
             ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, w, 1});
             ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, w, 1});
             ui_style_f32(UI_FLOAT_X, text_box->rect.w - w/2);

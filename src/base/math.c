@@ -27,6 +27,7 @@ F32  len_v2       (Vec2 v)                { return sqrt(v.x*v.x + v.y*v.y); }
 Vec2 normalize_v2 (Vec2 v)                { return mul(1.f/len(v), v); }
 
 Vec4 lerp_v4      (Vec4 a, Vec4 b, F32 t) { return vec4(lerp_f32(a.x, b.x, t), lerp_f32(a.y, b.y, t), lerp_f32(a.z, b.z, t), lerp_f32(a.w, b.w, t)); }
+Vec4 mul_f32_v4   (F32 s, Vec4 v)         { return vec4(v.x*s, v.y*s, v.z*s, v.w*s); }
 
 // =============================================================================
 // Matrices:

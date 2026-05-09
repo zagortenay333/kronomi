@@ -22,7 +22,7 @@ istruct (UiTile) {
     Bool tree_modified;
 };
 
-static F32 preview_tile_width = 80;
+#define preview_tile_width ui_em(7)
 
 static Void tile_insert (UiTile *info, UiTileNode *node, UiViewInstance *tab_id_to_insert, UiTileSplit split, U64 idx) {
     assert_dbg(idx == 0 || idx == 1);
@@ -118,14 +118,14 @@ static Void build_tabs_panel (UiTile *info, UiTileNode *node) {
             ui_style_u32(UI_ALIGN_Y, UI_ALIGN_MIDDLE);
             ui_style_f32(UI_SPACING, ui->theme->spacing);
 
-            F32 tab_width = (tabs_panel->rect.w - 32) / cast(F32, node->tab_ids.count) - 2*padding.x;
-            tab_width = clamp(tab_width, 96, 256);
+            F32 tab_width = (tabs_panel->rect.w - ui_em(3)) / cast(F32, node->tab_ids.count) - 2*padding.x;
+            tab_width = clamp(tab_width, ui_em(8), ui_em(21));
 
             array_iter (id, &node->tab_ids) {
                 UiBox *tab = ui_box_fmt(UI_BOX_REACTIVE, "tab%lu", ARRAY_IDX) {
                     F32 r = ui->theme->radius.x;
 
-                    ui_style_vec2(UI_PADDING, vec2(4, 4));
+                    ui_style_vec2(UI_PADDING, vec2(ui_em(1.0/3), ui_em(1.0/3)));
                     ui_style_f32(UI_SPACING, ui->theme->spacing);
                     ui_style_u32(UI_ALIGN_Y, UI_ALIGN_MIDDLE);
                     ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, tab_width, 1});
@@ -203,7 +203,7 @@ static Void build_tabs_panel (UiTile *info, UiTileNode *node) {
                     ui_style_vec2(UI_PADDING, vec2(2, 0));
                     ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
                     ui_style_u32(UI_ALIGN_Y, UI_ALIGN_MIDDLE);
-                    ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, array_get(&tabs->children, 0)->rect.h ?: 12, 1});
+                    ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, array_get(&tabs->children, 0)->rect.h ?: ui_em(1), 1});
                     ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, tab_width, 1});
                     ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color);
                     ui_style_vec4(UI_RADIUS, vec4(r, r, 0, 0));
@@ -256,7 +256,7 @@ static Void build_tabs_panel (UiTile *info, UiTileNode *node) {
                                 ui_style_vec4(UI_BORDER_COLOR, vec4(0, 0, 0, 0));
                                 ui_style_vec4(UI_BG_COLOR2, vec4(-1, 0, 0, 0));
                                 ui_style_f32(UI_OUTSET_SHADOW_WIDTH, 0);
-                                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 200, 1});
+                                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(16), 1});
                                 if (btn->signals.hovered) ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
 
                                 if (btn->signals.clicked) {
@@ -410,7 +410,7 @@ static void build_tile_splitter_ring (UiTile *info, UiTileNode *node) {
 }
 
 static Void build_tile_resizer (UiTile *info, UiTileNode *node, F32 offset) {
-    F32 width = 8;
+    F32 width = ui_em(1);
 
     UiBox *resizer = ui_box(UI_BOX_REACTIVE, "resizer") {
         if (node->split == UI_TILE_SPLIT_HORI) {
@@ -624,8 +624,8 @@ static Void build_outermost_tile_splitters (UiTile *info) {
             ui_tag("splitter");
             ui_style_f32(UI_FLOAT_X, ui->mouse.x + 10 - info->tile_splitter_container->rect.x);
             ui_style_f32(UI_FLOAT_Y, ui->mouse.y + 10 - info->tile_splitter_container->rect.y);
-            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 64, 1});
-            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 20, 1});
+            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(5.3), 1});
+            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(1.6), 1});
             ui_style_vec4(UI_BORDER_COLOR, ui->theme->border_color);
             ui_style_vec4(UI_BORDER_WIDTHS, ui->theme->border_width);
             ui_style_vec4(UI_RADIUS, vec4(r, r, 0, 0));
@@ -659,7 +659,7 @@ static Void build_node (UiTile *info, UiTileNode *node) {
                     ui_style_f32(UI_EDGE_SOFTNESS, 0);
                     ui_style_vec4(UI_BG_COLOR, ui->theme->border_color);
                     ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-                    ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, 1, 0});
+                    ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui_em(1./12), 0});
                 }
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1.f - node->ratio, 0});
                 ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
@@ -669,7 +669,7 @@ static Void build_node (UiTile *info, UiTileNode *node) {
                     ui_style_f32(UI_EDGE_SOFTNESS, 0);
                     ui_style_vec4(UI_BG_COLOR, ui->theme->border_color);
                     ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-                    ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, 1, 0});
+                    ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PIXELS, ui_em(.1), 0});
                 }
                 ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
                 ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1.f - node->ratio, 0});

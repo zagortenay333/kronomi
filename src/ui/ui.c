@@ -35,6 +35,27 @@ static UiStyle default_box_style = {
     .animation_time = .3,
 };
 
+Void ui_scale (F32 scale) {
+    ui->config->icon_size *= scale;
+    ui->config->font_size *= scale;
+    ui->config->card_width *= scale;
+    ui->config->line_spacing *= scale;
+    ui->config->scrollbar_width *= scale;
+    ui->theme->spacing *= scale;
+    ui->theme->padding = mul(scale, ui->theme->padding);
+    ui->theme->radius = mul(scale, ui->theme->radius);
+    ui->theme->border_width = mul(scale, ui->theme->border_width);
+    ui->theme->border_width_focus = mul(scale, ui->theme->border_width_focus);
+    ui->theme->in_shadow_width *= scale;
+    ui->theme->out_shadow_width *= scale;
+    ui->theme->padding_titlebar = mul(scale, ui->theme->padding_titlebar);
+    ui->theme->radius_titlebar *= scale;
+}
+
+F32 ui_em (F32 val) {
+    return val * ui->config->font_size;
+}
+
 Void ui_set_mouse_cursor (MouseCursor cursor) {
     ui->mouse_cursor = cursor;
 }

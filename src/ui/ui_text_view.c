@@ -369,7 +369,8 @@ UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, Sl
             array_init(&info->styled_glyphs, info->header.mem);
             array_init(&info->lines, info->header.mem);
             compute_glyphs(info, markup_ranges);
-        } else if (! str_match(text, info->text)) {
+        } else if (font_size != info->font_size || !str_match(text, info->text)) {
+            info->font_size = font_size;
             info->text = str_copy(info->header.mem, text);
             info->markup.count = 0;
             info->styled_glyphs.count = 0;
