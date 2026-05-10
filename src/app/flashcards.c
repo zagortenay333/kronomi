@@ -102,6 +102,7 @@ istruct (Command) {
 istruct (Context) {
     View view;
     Mem *view_mem;
+    U64 n_open_views;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -862,20 +863,6 @@ static Void build_view_main () {
     }
 }
 
-Void flashcards_view_init (UiViewInstance *) {
-}
-
-Void flashcards_view_free (UiViewInstance *) {
-}
-
-UiIcon flashcards_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_FLASH;
-}
-
-String flashcards_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Flashcards");
-}
-
 static Void destroy_current_view () {
     switch (context->view.tag) {
     case VIEW_MAIN: break;
@@ -1003,23 +990,38 @@ Void flashcards_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
-Void flashcards_init () {
-    if (context) return;
+Void flashcards_view_init (UiViewInstance *) {
+    if (! context) {
+        context = mem_new(mem_root, Context);
+        context->config_version = 0;
+        context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        array_init(&context->commands, mem_root);
 
-    context = mem_new(mem_root, Context);
-    context->config_version = 0;
-    context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    array_init(&context->commands, mem_root);
+        { // Build config file path:
+            tmem_new(tm);
+            AString a = astr_new(mem_root);
+            astr_push_str(&a, fs_get_home_dir(tm));
+            astr_push_cstr(&a, "/.config/chronomi/flashcards.txt");
+            context->config_file_path = astr_to_str(&a);
+        }
 
-    { // Build config file path:
-        tmem_new(tm);
-        AString a = astr_new(mem_root);
-        astr_push_str(&a, fs_get_home_dir(tm));
-        astr_push_cstr(&a, "/.config/chronomi/flashcards.txt");
-        context->config_file_path = astr_to_str(&a);
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
     }
 
-    load_config();
-    push_command(.tag=CMD_VIEW_MAIN);
+    context->n_open_views++;
+}
+
+Void flashcards_view_free (UiViewInstance *) {
+    assert_always(context->n_open_views > 0);
+    context->n_open_views--;
+}
+
+UiIcon flashcards_view_get_icon (UiViewInstance *, Bool visible) {
+    return UI_ICON_FLASH;
+}
+
+String flashcards_view_get_title (UiViewInstance *, Bool visible) {
+    return str("Flashcards");
 }

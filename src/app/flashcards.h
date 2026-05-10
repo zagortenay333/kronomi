@@ -4,7 +4,6 @@
 #include "ui/ui.h"
 #include "ui/ui_view.h"
 
-Void   flashcards_init           ();
 Void   flashcards_view_init      (UiViewInstance *);
 Void   flashcards_view_free      (UiViewInstance *);
 UiIcon flashcards_view_get_icon  (UiViewInstance *, Bool visible);

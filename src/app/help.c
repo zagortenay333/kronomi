@@ -10,20 +10,6 @@ istruct (Context) {
 
 static Context *context;
 
-Void help_view_init (UiViewInstance *) {
-}
-
-Void help_view_free (UiViewInstance *) {
-}
-
-UiIcon help_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_QUESTION;
-}
-
-String help_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Help");
-}
-
 Void help_view_build (UiViewInstance *, Bool visible) {
     tmem_new(tm);
 
@@ -82,12 +68,24 @@ Void help_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
-Void help_init () {
-    if (context) return;
-    tmem_new(tm);
-    context = mem_new(mem_root, Context);
-    AString a = astr_new(tm);
-    astr_push_str(&a, fs_read_entire_file(tm, str("data/docs/help.txt"), 0));
-    astr_push_str(&a, fs_read_entire_file(tm, str("data/docs/markup.txt"), 0));
-    context->buf = buf_new(mem_root, astr_to_str(&a));
+Void help_view_init (UiViewInstance *) {
+    if (! context) {
+        tmem_new(tm);
+        context = mem_new(mem_root, Context);
+        AString a = astr_new(tm);
+        astr_push_str(&a, fs_read_entire_file(tm, str("data/docs/help.txt"), 0));
+        astr_push_str(&a, fs_read_entire_file(tm, str("data/docs/markup.txt"), 0));
+        context->buf = buf_new(mem_root, astr_to_str(&a));
+    }
+}
+
+Void help_view_free (UiViewInstance *) {
+}
+
+UiIcon help_view_get_icon (UiViewInstance *, Bool) {
+    return UI_ICON_QUESTION;
+}
+
+String help_view_get_title (UiViewInstance *, Bool) {
+    return str("Help");
 }

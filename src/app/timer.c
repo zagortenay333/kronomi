@@ -74,6 +74,7 @@ istruct (Command) {
 istruct (Context) {
     View view;
     Mem *view_mem;
+    U64 n_open_views;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -108,6 +109,14 @@ static String time_to_str (Mem *mem, Millisec ms) {
     U64 minutes = (ms / 60000) % 60;
     U64 hours   = ms / 3600000;
     return astr_fmt(mem, "%02lu:%02lu:%02lu", hours, minutes, seconds);
+}
+
+static Void pause (Timer *timer) {
+    if (timer->state != TIMER_RUNNING) return;
+    timer->state = TIMER_PAUSED;
+    assert_always(context->n_running);
+    context->n_running--;
+    if (context->n_running == 0) win_tick_end(context->tick_id);
 }
 
 static Void save_config () {
@@ -481,20 +490,6 @@ static Void build_view_main () {
     }
 }
 
-Void timer_view_init (UiViewInstance *) {
-}
-
-Void timer_view_free (UiViewInstance *) {
-}
-
-UiIcon timer_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_TIMER;
-}
-
-String timer_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Timer");
-}
-
 static Void destroy_current_view () {
     switch (context->view.tag) {
     case VIEW_MAIN: break;
@@ -536,11 +531,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_PAUSE: {
-            Timer *timer = cmd->timer;
-            assert_dbg(timer->state == TIMER_RUNNING);
-            timer->state = TIMER_PAUSED;
-            if (context->n_running == 0) context->tick_id = win_tick_start(1000);
-            context->n_running++;
+            pause(cmd->timer);
         } break;
 
         case CMD_RESET: {
@@ -608,23 +599,41 @@ Void timer_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
-Void timer_init () {
-    if (context) return;
+Void timer_view_init (UiViewInstance *) {
+    if (! context) {
+        context = mem_new(mem_root, Context);
+        context->config_version = 0;
+        context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        array_init(&context->commands, mem_root);
 
-    context = mem_new(mem_root, Context);
-    context->config_version = 0;
-    context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    array_init(&context->commands, mem_root);
+        { // Build config file path:
+            tmem_new(tm);
+            AString a = astr_new(mem_root);
+            astr_push_str(&a, fs_get_home_dir(tm));
+            astr_push_cstr(&a, "/.config/chronomi/timer.txt");
+            context->config_file_path = astr_to_str(&a);
+        }
 
-    { // Build config file path:
-        tmem_new(tm);
-        AString a = astr_new(mem_root);
-        astr_push_str(&a, fs_get_home_dir(tm));
-        astr_push_cstr(&a, "/.config/chronomi/timer.txt");
-        context->config_file_path = astr_to_str(&a);
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
     }
 
-    load_config();
-    push_command(.tag=CMD_VIEW_MAIN);
+    context->n_open_views++;
+}
+
+Void timer_view_free (UiViewInstance *) {
+    assert_always(context->n_open_views > 0);
+    context->n_open_views--;
+    if (context->n_open_views == 0) {
+        array_iter (timer, &context->timers) pause(timer);
+    }
+}
+
+UiIcon timer_view_get_icon (UiViewInstance *, Bool visible) {
+    return UI_ICON_TIMER;
+}
+
+String timer_view_get_title (UiViewInstance *, Bool visible) {
+    return str("Timer");
 }

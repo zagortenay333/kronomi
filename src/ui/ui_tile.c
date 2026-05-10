@@ -61,7 +61,9 @@ static Void tile_insert (UiTile *info, UiTileNode *node, UiViewInstance *tab_id_
 
 static Void tile_tab_remove (UiTile *info, UiTileNode *node, U64 tab_idx) {
     if (node->active_tab_idx > tab_idx) node->active_tab_idx--;
+    UiViewInstance *instance = array_get(&node->tab_ids, tab_idx);
     array_remove(&node->tab_ids, tab_idx);
+    ui_view_instance_remove(info->view_store, instance);
     node->active_tab_idx = clamp(node->active_tab_idx, 0u, node->tab_ids.count - 1);
     info->tree_modified = true;
 }

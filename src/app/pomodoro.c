@@ -78,6 +78,7 @@ istruct (Command) {
 istruct (Context) {
     View view;
     Mem *view_mem;
+    U64 n_open_views;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -106,6 +107,15 @@ static Void play_sound (Pomodoro *pomo) {
     if (pomo->sound_id) return;
     if (! pomo->sound_file.count) return;
     pomo->sound_id = win_sound_play(mem_root, pomo->sound_file, false);
+}
+
+static Void pause (Pomodoro *pomo) {
+    if (! pomo->running) return;
+    destroy_sound(pomo);
+    pomo->running = false;
+    assert_always(context->n_running);
+    context->n_running--;
+    if (context->n_running == 0) win_tick_end(context->tick_id);
 }
 
 static Void save_config () {
@@ -564,20 +574,6 @@ static Void build_view_main () {
     }
 }
 
-Void pomodoro_view_init (UiViewInstance *) {
-}
-
-Void pomodoro_view_free (UiViewInstance *) {
-}
-
-UiIcon pomodoro_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_POMODORO;
-}
-
-String pomodoro_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Pomodoro");
-}
-
 static Void destroy_current_view () {
     switch (context->view.tag) {
     case VIEW_MAIN: break;
@@ -617,11 +613,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_PAUSE: {
-            assert_dbg(cmd->pomo->running);
-            destroy_sound(cmd->pomo);
-            cmd->pomo->running = false;
-            context->n_running--;
-            if (context->n_running == 0) win_tick_end(context->tick_id);
+            pause(cmd->pomo);
         } break;
 
         case CMD_VIEW_MAIN: {
@@ -698,32 +690,55 @@ Void pomodoro_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
+Void pomodoro_view_init (UiViewInstance *) {
+    if (! context) {
+        context = mem_new(mem_root, Context);
+        context->config_version = 0;
+        context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        array_init(&context->commands, mem_root);
+
+        { // Build phase strings:
+            ArrayString a;
+            array_init(&a, mem_root);
+            array_push(&a, astr_fmt(mem_root, "Work"));
+            array_push(&a, astr_fmt(mem_root, "Short Break"));
+            array_push(&a, astr_fmt(mem_root, "Long Break"));
+            context->phase_strings = a.as_slice;
+        }
+
+        { // Build config file path:
+            tmem_new(tm);
+            AString a = astr_new(mem_root);
+            astr_push_str(&a, fs_get_home_dir(tm));
+            astr_push_cstr(&a, "/.config/chronomi/pomodoro.txt");
+            context->config_file_path = astr_to_str(&a);
+        }
+
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
+    }
+
+    context->n_open_views++;
+}
+
+Void pomodoro_view_free (UiViewInstance *) {
+    assert_always(context->n_open_views > 0);
+    context->n_open_views--;
+    if (context->n_open_views == 0) {
+        array_iter (pomo, &context->pomodoros) pause(pomo);
+    }
+}
+
+UiIcon pomodoro_view_get_icon (UiViewInstance *, Bool visible) {
+    return UI_ICON_POMODORO;
+}
+
+String pomodoro_view_get_title (UiViewInstance *, Bool visible) {
+    return str("Pomodoro");
+}
+
 Void pomodoro_init () {
     if (context) return;
 
-    context = mem_new(mem_root, Context);
-    context->config_version = 0;
-    context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    array_init(&context->commands, mem_root);
-
-    { // Build phase strings:
-        ArrayString a;
-        array_init(&a, mem_root);
-        array_push(&a, astr_fmt(mem_root, "Work"));
-        array_push(&a, astr_fmt(mem_root, "Short Break"));
-        array_push(&a, astr_fmt(mem_root, "Long Break"));
-        context->phase_strings = a.as_slice;
-    }
-
-    { // Build config file path:
-        tmem_new(tm);
-        AString a = astr_new(mem_root);
-        astr_push_str(&a, fs_get_home_dir(tm));
-        astr_push_cstr(&a, "/.config/chronomi/pomodoro.txt");
-        context->config_file_path = astr_to_str(&a);
-    }
-
-    load_config();
-    push_command(.tag=CMD_VIEW_MAIN);
 }

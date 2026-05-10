@@ -4,7 +4,6 @@
 #include "ui/ui.h"
 #include "ui/ui_view.h"
 
-Void   todo_init           ();
 Void   todo_view_init      (UiViewInstance *);
 Void   todo_view_free      (UiViewInstance *);
 UiIcon todo_view_get_icon  (UiViewInstance *, Bool visible);

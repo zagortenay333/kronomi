@@ -485,12 +485,4 @@ Void app_init () {
     }
 
     load_config();
-
-    flashcards_init();
-    stopwatch_init();
-    pomodoro_init();
-    timer_init();
-    alarm_init();
-    todo_init();
-    help_init();
 }

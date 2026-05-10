@@ -72,6 +72,7 @@ istruct (Command) {
 istruct (Context) {
     View view;
     Mem *view_mem;
+    U64 n_open_views;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -456,20 +457,6 @@ static Void build_view_main () {
     }
 }
 
-Void alarm_view_init (UiViewInstance *) {
-}
-
-Void alarm_view_free (UiViewInstance *) {
-}
-
-UiIcon alarm_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_ALARM;
-}
-
-String alarm_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Alarm");
-}
-
 static Void destroy_current_view () {
     switch (context->view.tag) {
     case VIEW_MAIN: break;
@@ -595,6 +582,7 @@ Void alarm_view_build (UiViewInstance *, Bool visible) {
         push_command(.tag=CMD_VIEW_MAIN);
         execute_commands();
     }
+
     if (context->tick_id == 0) context->tick_id = win_tick_start(2000);
     tick();
 
@@ -605,24 +593,45 @@ Void alarm_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
-Void alarm_init () {
-    if (context) return;
+Void alarm_view_init (UiViewInstance *) {
+    if (! context) {
+        context = mem_new(mem_root, Context);
+        context->config_version = 0;
+        context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        array_init(&context->commands, mem_root);
+        array_init(&context->snoozed_alarms, mem_root);
 
-    context = mem_new(mem_root, Context);
-    context->config_version = 0;
-    context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    array_init(&context->commands, mem_root);
-    array_init(&context->snoozed_alarms, mem_root);
+        { // Build config file path:
+            tmem_new(tm);
+            AString a = astr_new(mem_root);
+            astr_push_str(&a, fs_get_home_dir(tm));
+            astr_push_cstr(&a, "/.config/chronomi/alarm.txt");
+            context->config_file_path = astr_to_str(&a);
+        }
 
-    { // Build config file path:
-        tmem_new(tm);
-        AString a = astr_new(mem_root);
-        astr_push_str(&a, fs_get_home_dir(tm));
-        astr_push_cstr(&a, "/.config/chronomi/alarm.txt");
-        context->config_file_path = astr_to_str(&a);
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
     }
 
-    load_config();
-    push_command(.tag=CMD_VIEW_MAIN);
+    context->n_open_views++;
+}
+
+Void alarm_view_free (UiViewInstance *) {
+    assert_always(context->n_open_views > 0);
+    context->n_open_views--;
+    if (context->n_open_views == 0) {
+        if (context->tick_id) {
+            win_tick_end(context->tick_id);
+            context->tick_id = 0;
+        }
+    }
+}
+
+UiIcon alarm_view_get_icon (UiViewInstance *, Bool visible) {
+    return UI_ICON_ALARM;
+}
+
+String alarm_view_get_title (UiViewInstance *, Bool visible) {
+    return str("Alarm");
 }

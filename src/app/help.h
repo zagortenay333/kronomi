@@ -4,7 +4,6 @@
 #include "ui/ui.h"
 #include "ui/ui_view.h"
 
-Void   help_init           ();
 Void   help_view_init      (UiViewInstance *);
 Void   help_view_free      (UiViewInstance *);
 UiIcon help_view_get_icon  (UiViewInstance *, Bool visible);

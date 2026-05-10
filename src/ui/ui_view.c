@@ -22,7 +22,8 @@ UiViewInstance *ui_view_instance_new (UiViewStore *store, U32 type_id) {
 
 Void ui_view_instance_remove (UiViewStore *store, UiViewInstance *instance) {
     instance->type->free(instance);
-    array_find_remove_fast(&store->instances, IT == instance); // @todo leak
+    array_find_remove_fast(&store->instances, IT == instance);
+    mem_free(store->mem, .old_ptr=instance);
 }
 
 Void ui_view_type_add (UiViewStore *store, UiViewType type) {

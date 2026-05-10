@@ -176,6 +176,7 @@ istruct (Context) {
     View view;
     Mem *view_mem;
     MainViewTag main_view_type;
+    U64 n_open_views;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -1582,7 +1583,7 @@ static Void compute_time_tracker_stats () {
 
             date.day++;
         }
-    } 
+    }
 }
 
 static Vec4 get_color_for_time (Seconds total) {
@@ -2177,7 +2178,7 @@ static Void build_view_main () {
 
     Date d = os_get_date();
     if (os_date_cmp(d, view->today) != 0) {
-        view->today = d; 
+        view->today = d;
         compute_kanban_columns();
     }
 
@@ -2267,20 +2268,6 @@ static Void build_view_main () {
         case MAIN_VIEW_COMPACT: build_view_main_compact(); break;
         }
     }
-}
-
-Void todo_view_init (UiViewInstance *) {
-}
-
-Void todo_view_free (UiViewInstance *) {
-}
-
-UiIcon todo_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_TODO;
-}
-
-String todo_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Todo");
 }
 
 static Void destroy_current_view () {
@@ -2588,23 +2575,39 @@ Void todo_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
-Void todo_init () {
-    if (context) return;
+Void todo_view_init (UiViewInstance *) {
+    if (! context) {
+        context = mem_new(mem_root, Context);
+        context->config_version = 2;
+        context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        array_init(&context->commands, mem_root);
 
-    context = mem_new(mem_root, Context);
-    context->config_version = 2;
-    context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    array_init(&context->commands, mem_root);
+        { // Build config file path:
+            tmem_new(tm);
+            AString a = astr_new(mem_root);
+            astr_push_str(&a, fs_get_home_dir(tm));
+            astr_push_cstr(&a, "/.config/chronomi/todo.txt");
+            context->config_file_path = astr_to_str(&a);
+        }
 
-    { // Build config file path:
-        tmem_new(tm);
-        AString a = astr_new(mem_root);
-        astr_push_str(&a, fs_get_home_dir(tm));
-        astr_push_cstr(&a, "/.config/chronomi/todo.txt");
-        context->config_file_path = astr_to_str(&a);
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
     }
 
-    load_config();
-    push_command(.tag=CMD_VIEW_MAIN);
+    context->n_open_views++;
+}
+
+Void todo_view_free (UiViewInstance *) {
+    assert_always(context->n_open_views > 0);
+    context->n_open_views--;
+    if (context->n_open_views == 0) stop_tracking();
+}
+
+UiIcon todo_view_get_icon (UiViewInstance *, Bool) {
+    return UI_ICON_TODO;
+}
+
+String todo_view_get_title (UiViewInstance *, Bool) {
+    return str("Todo");
 }

@@ -81,6 +81,7 @@ istruct (Command) {
 istruct (Context) {
     View view;
     Mem *view_mem;
+    U64 n_open_views;
     U64 config_version;
     String config_file_path;
     Array(Command) commands;
@@ -103,6 +104,14 @@ static String time_to_str (Mem *mem, Millisec ms) {
     U64 minutes  = (ms / 60000) % 60;
     U64 hours    = ms / 3600000;
     return astr_fmt(mem, "%02lu:%02lu:%02lu.%02lu", hours, minutes, seconds, cseconds);
+}
+
+static Void pause (Stopwatch *sw) {
+    if (sw->state != STOPWATCH_RUNNING) return;
+    sw->state = STOPWATCH_PAUSED;
+    assert_dbg(context->n_running);
+    context->n_running--;
+    if (context->n_running == 0) win_tick_end(context->tick_id);
 }
 
 static Void save_config () {
@@ -462,20 +471,6 @@ static Void build_view_main () {
     }
 }
 
-Void stopwatch_view_init (UiViewInstance *) {
-}
-
-Void stopwatch_view_free (UiViewInstance *) {
-}
-
-UiIcon stopwatch_view_get_icon (UiViewInstance *, Bool visible) {
-    return UI_ICON_STOPWATCH;
-}
-
-String stopwatch_view_get_title (UiViewInstance *, Bool visible) {
-    return str("Stopwatch");
-}
-
 static Void destroy_current_view () {
     switch (context->view.tag) {
     case VIEW_MAIN: break;
@@ -521,12 +516,7 @@ static Void execute_commands () {
         } break;
 
         case CMD_PAUSE: {
-            Stopwatch *sw = cmd.stopwatch;
-            assert_dbg(sw->state == STOPWATCH_RUNNING);
-            sw->state = STOPWATCH_PAUSED;
-            assert_dbg(context->n_running);
-            context->n_running--;
-            if (context->n_running == 0) win_tick_end(context->tick_id);
+            pause(cmd.stopwatch);
         } break;
 
         case CMD_RESET: {
@@ -612,23 +602,41 @@ Void stopwatch_view_build (UiViewInstance *, Bool visible) {
     }
 }
 
-Void stopwatch_init () {
-    if (context) return;
+Void stopwatch_view_init (UiViewInstance *) {
+    if (! context) {
+        context = mem_new(mem_root, Context);
+        context->config_version = 0;
+        context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
+        array_init(&context->commands, mem_root);
 
-    context = mem_new(mem_root, Context);
-    context->config_version = 0;
-    context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
-    array_init(&context->commands, mem_root);
+        { // Build config file path:
+            tmem_new(tm);
+            AString a = astr_new(mem_root);
+            astr_push_str(&a, fs_get_home_dir(tm));
+            astr_push_cstr(&a, "/.config/chronomi/stopwatch.txt");
+            context->config_file_path = astr_to_str(&a);
+        }
 
-    { // Build config file path:
-        tmem_new(tm);
-        AString a = astr_new(mem_root);
-        astr_push_str(&a, fs_get_home_dir(tm));
-        astr_push_cstr(&a, "/.config/chronomi/stopwatch.txt");
-        context->config_file_path = astr_to_str(&a);
+        load_config();
+        push_command(.tag=CMD_VIEW_MAIN);
     }
 
-    load_config();
-    push_command(.tag=CMD_VIEW_MAIN);
+    context->n_open_views++;
+}
+
+Void stopwatch_view_free (UiViewInstance *) {
+    assert_always(context->n_open_views > 0);
+    context->n_open_views--;
+    if (context->n_open_views == 0) {
+        array_iter (sw, &context->stopwatches) pause(sw);
+    }
+}
+
+UiIcon stopwatch_view_get_icon (UiViewInstance *, Bool visible) {
+    return UI_ICON_STOPWATCH;
+}
+
+String stopwatch_view_get_title (UiViewInstance *, Bool visible) {
+    return str("Stopwatch");
 }

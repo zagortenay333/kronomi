@@ -4,7 +4,6 @@
 #include "ui/ui.h"
 #include "ui/ui_view.h"
 
-Void   stopwatch_init           ();
 Void   stopwatch_view_init      (UiViewInstance *);
 Void   stopwatch_view_free      (UiViewInstance *);
 UiIcon stopwatch_view_get_icon  (UiViewInstance *, Bool visible);
