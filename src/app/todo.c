@@ -1123,7 +1123,8 @@ static Void build_view_search () {
         ui_box(0, "search_box") {
             ui_style_f32(UI_SPACING, ui->theme->spacing);
             ui_entry(str("entry"), view->buf, -1, str("Filter expression..."));
-            ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
+            UiBox *info_button = ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
+            info_button->next_style.size.width.strictness = 1;
         }
 
         ui_box(UI_BOX_INVISIBLE_BG, "checkboxes") {
