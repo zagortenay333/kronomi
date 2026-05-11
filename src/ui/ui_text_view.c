@@ -14,6 +14,7 @@ istruct (UiTextView) {
     UiBoxData header;
     F32 font_size;
     String text;
+    String text_normalized;
     F32 viewport_width;
     ArrayUiMarkupRange markup;
     Array(StyledGlyphInfo) styled_glyphs;
@@ -191,7 +192,7 @@ static Void compute_glyphs (UiTextView *info, SliceUiMarkupRange markup_ranges) 
     Font *font_italic_small = font_get(ui->font_cache, ui->config->font_path_italic, info->font_size * .7);
     Font *font_mono_small   = font_get(ui->font_cache, ui->config->font_path_mono, info->font_size * .7);
 
-    ui_markup_flatten_ranges(info->text, markup_ranges, &info->markup);
+    ui_markup_flatten_ranges(info->text_normalized, markup_ranges, &info->markup);
 
     U64 offset = 0;
     array_iter (range, &info->markup, *) {
@@ -212,7 +213,7 @@ static Void compute_glyphs (UiTextView *info, SliceUiMarkupRange markup_ranges) 
             }
         }
 
-        String slice = str_slice(info->text, range->start, range->end - range->start + 1);
+        String slice = str_slice(info->text_normalized, range->start, range->end - range->start + 1);
         SliceGlyphInfo glyphs = font_get_glyph_infos(font, info->header.mem, slice);
 
         array_iter (glyph, &glyphs, *) {
@@ -348,11 +349,10 @@ static Void draw (UiBox *box) {
         current_y_offset += font_normal->height;
     }
 
-    if (current_y_offset == 0.0 && info->text.count) current_y_offset += font_normal->height;
+    if (current_y_offset == 0.0 && info->text_normalized.count) current_y_offset += font_normal->height;
     box->rect.h = current_y_offset;
 }
 
-// Replace lonely newline characters with a space.
 static String copy_normalized (UiTextView *info, String text) {
     AString a = astr_new(info->header.mem);
     array_ensure_capacity_min(&a, text.count);
@@ -362,7 +362,7 @@ static String copy_normalized (UiTextView *info, String text) {
             astr_push_byte(&a, c);
         } else if (ARRAY_ITER_DONE) {
             break;
-        } else if (text.data[ARRAY_IDX+1] == '\n') {
+        } else if (text.data[ARRAY_IDX + 1] == '\n') {
             astr_push_byte(&a, c);
         } else {
             astr_push_byte(&a, ' ');
@@ -384,14 +384,16 @@ UiBox *ui_text_view (UiBoxFlags flags, String id, String text, F32 font_size, Bo
 
         if (! info->text.data) {
             info->font_size = font_size;
-            info->text = soft_newline ? copy_normalized(info, text) : str_copy(info->header.mem, text);
+            info->text = str_copy(info->header.mem, text);
+            info->text_normalized = soft_newline ? copy_normalized(info, text) : info->text;
             array_init(&info->markup, info->header.mem);
             array_init(&info->styled_glyphs, info->header.mem);
             array_init(&info->lines, info->header.mem);
             compute_glyphs(info, markup_ranges);
         } else if (font_size != info->font_size || !str_match(text, info->text)) {
             info->font_size = font_size;
-            info->text = soft_newline ? copy_normalized(info, text) : str_copy(info->header.mem, text);
+            info->text = str_copy(info->header.mem, text);
+            info->text_normalized = soft_newline ? copy_normalized(info, text) : info->text;
             info->markup.count = 0;
             info->styled_glyphs.count = 0;
             info->viewport_width = 0;
