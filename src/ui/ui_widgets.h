@@ -29,10 +29,37 @@ istruct (UiGraphData) {
     Array(UiGraphRecord) records;
 };
 
+istruct (UiFdGraphNode) {
+    Vec2 pos;
+    Vec2 ipos; // Intermidate for animation.
+    Vec2 displacement;
+    Void *data; // User set.
+};
+
+istruct (UiFdGraphEdge) {
+    UiFdGraphNode *a;
+    UiFdGraphNode *b;
+};
+
+istruct (UiFdGraphData) {
+    F32 node_size;
+    F32 edge_thickness;
+    Vec2 pan;
+    F32 zoom;
+    F32 density;
+    Vec4 edge_color;
+    UiFdGraphNode *hovered;
+    UiFdGraphNode *selected;
+    Array(UiFdGraphNode) nodes;
+    Array(UiFdGraphEdge) edges;
+};
+
 UiBox *ui_hspacer              ();
 UiBox *ui_vspacer              ();
 UiBox *ui_label                (UiBoxFlags, CString id, String label);
 UiBox *ui_label_extra          (UiBoxFlags, CString id, String label, String font_path, F32 font_size, Bool monospace);
+UiBox *ui_fd_graph             (String id, UiFdGraphData *);
+Void   ui_fd_graph_layout      (UiFdGraphData *data);
 UiBox *ui_line_graph           (String id, UiGraphData *);
 UiBox *ui_icon                 (UiBoxFlags, CString id, U32 icon);
 UiBox *ui_icon_button          (UiBoxFlags flags, CString id, U32 icon);

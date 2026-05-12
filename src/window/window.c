@@ -283,7 +283,32 @@ SliceVertex dr_rect_fn (RectAttributes *a) {
     return (SliceVertex){p,6};
 }
 
-Void dr_line (Vec2 a, Vec2 b, Vec4 color, F32 softness, F32 thickness) {
+Void dr_line_fast (Vec2 a, Vec2 b, Vec4 color, F32 thickness) {
+    Vec2 dir = normalize(sub(a, b));
+    Vec2 nor = mul(thickness / 2, vec2(-dir.y, dir.x));
+
+    Vec2 p1 = add(a, nor); 
+    Vec2 p2 = sub(a, nor); 
+    Vec2 p3 = add(b, nor); 
+    Vec2 p4 = sub(b, nor); 
+
+    p1.y = win_height - p1.y;
+    p2.y = win_height - p2.y;
+    p3.y = win_height - p3.y;
+    p4.y = win_height - p4.y;
+
+    RectAttributes attr = { .text_is_grayscale = -3 };
+    Vertex *p = dr_reserve_vertices(6);
+
+    draw_rect_vertex(&p[0], p1, vec2(0, 0), color, &attr);
+    draw_rect_vertex(&p[1], p2, vec2(0, 0), color, &attr);
+    draw_rect_vertex(&p[2], p3, vec2(0, 0), color, &attr);
+    draw_rect_vertex(&p[3], p2, vec2(0, 0), color, &attr);
+    draw_rect_vertex(&p[4], p3, vec2(0, 0), color, &attr);
+    draw_rect_vertex(&p[5], p4, vec2(0, 0), color, &attr);
+}
+
+Void dr_line (Vec2 a, Vec2 b, Vec4 color, F32 thickness, F32 softness) {
     RectAttributes attr = {0};
 
     F32 half = thickness * 0.5f;

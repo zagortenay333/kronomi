@@ -169,6 +169,11 @@ void draw_triangle () {
     frag_color.rgb *= frag_color.a;
 }
 
+void draw_line_fast () {
+    frag_color = color;
+    frag_color.rgb *= frag_color.a;
+}
+
 void main () {
     if (text_is_grayscale >= 0) {
         draw_rect();
@@ -176,5 +181,7 @@ void main () {
         draw_line();
     } else if (text_is_grayscale == -2) {
         draw_triangle();
+    } else if (text_is_grayscale == -3) {
+        draw_line_fast();
     }
 }

@@ -9,7 +9,7 @@
    id="svg11300"
    sodipodi:version="0.32"
    inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
-   sodipodi:docname="cronomix-import-export-symbolic.svg"
+   sodipodi:docname="import-export-symbolic.svg"
    inkscape:output_extension="org.inkscape.output.svg.inkscape"
    version="1.0"
    style="display:inline;enable-background:new"
@@ -38,7 +38,7 @@
      inkscape:document-units="px"
      inkscape:showpageshadow="false"
      inkscape:window-width="1366"
-     inkscape:window-height="768"
+     inkscape:window-height="740"
      inkscape:window-x="0"
      inkscape:window-y="0"
      width="400px"
@@ -153,28 +153,8 @@
      id="layer1"
      transform="translate(0,-284)">
     <path
-       style="fill:#bebebe;fill-opacity:1"
-       d="m 0,288 5,-4 v 8 z"
        id="path1"
-       sodipodi:nodetypes="cccc" />
-    <rect
        style="fill:#bebebe;fill-opacity:1"
-       id="rect2"
-       width="7"
-       height="2"
-       x="4"
-       y="287" />
-    <rect
-       style="fill:#bebebe;fill-opacity:1"
-       id="rect3"
-       width="7"
-       height="2"
-       x="5"
-       y="295" />
-    <path
-       style="fill:#bebebe;fill-opacity:1"
-       d="m 16,296 -5,-4 v 8 z"
-       id="path3"
-       sodipodi:nodetypes="cccc" />
+       d="M 5 284 L 0 288 L 5 292 L 5 289 L 11 289 L 11 287 L 5 287 L 5 284 z M 11 292 L 11 295 L 5 295 L 5 297 L 11 297 L 11 300 L 16 296 L 11 292 z " />
   </g>
 </svg>

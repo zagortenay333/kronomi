@@ -52,6 +52,7 @@ U64  random_u64   () { return xorshift64(); }
 
 // This uses the non-deterministic openBSD algo.
 U64 random_range (U64 l, U64 u) {
+    if (u == l) return l;
     if (u < l) swap(l, u);
     u -= l;
     U64 r;

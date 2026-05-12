@@ -2133,7 +2133,7 @@ static Void draw_line_graph (UiBox *box) {
             F32 y  = r.y + r.h - h;
             Vec2 a = {r.x, y};
             Vec2 b = {r.x + r.w, y};
-            dr_line(a, b, guide_col, 0, 1 * win_get_display_scale());
+            dr_line(a, b, guide_col, 1 * win_get_display_scale(), 0);
         }
     }
 
@@ -2171,7 +2171,7 @@ static Void draw_line_graph (UiBox *box) {
         array_iter_from (record, &data->records, 1, *) {
             F32 h   = (cast(F64, record->value) / data->y_max) * r.h;
             Vec2 p2 = { p1.x + spacing + 2*dot_size, r.y + r.h - h };
-            dr_line(p1, p2, line_col, softness, line_thick);
+            dr_line(p1, p2, line_col, line_thick, softness);
             p1 = p2;
         }
     }
@@ -2200,6 +2200,192 @@ UiBox *ui_line_graph (String id, UiGraphData *data) {
             inner->draw_fn = draw_line_graph;
             inner->size_fn = size_line_graph;
             inner->scratch = cast(U64, data);
+        }
+    }
+
+    return container;
+}
+
+static Vec2 fd_graph_xform_point (UiBox *container, Vec2 pos) {
+    UiFdGraphData *data = cast(UiFdGraphData*, container->scratch);
+    Vec2 center = { container->rect.x + container->rect.w/2, container->rect.y + container->rect.h/2 };
+    pos = mul(data->zoom, pos);
+    pos = add(pos, data->pan);
+    pos = add(pos, center);
+    return pos;
+}
+
+static F32 fd_graph_get_node_size (UiFdGraphData *data) {
+    return min(ui_em(1), data->node_size * data->zoom);
+}
+
+static Void draw_fd_node (UiBox *container, UiFdGraphNode *node) {
+    UiFdGraphData *data = cast(UiFdGraphData*, container->scratch);
+    Vec2 pos = fd_graph_xform_point(container, node->ipos);
+    F32 size = fd_graph_get_node_size(data);
+    if (node == data->hovered || node == data->selected) dr_circle(pos, size*1.4, ui->theme->text_color_normal, .75);
+    dr_circle(pos, size, ui->theme->text_color_green, .75);
+}
+
+static Void draw_fd_edge (UiBox *container, UiFdGraphEdge *edge) {
+    UiFdGraphData *data = cast(UiFdGraphData*, container->scratch);
+
+    Vec2 a = fd_graph_xform_point(container, edge->a->ipos);
+    Vec2 b = fd_graph_xform_point(container, edge->b->ipos);
+
+    Vec4 color = (edge->a == data->hovered || edge->b == data->hovered) ? ui->theme->text_color_green : data->edge_color;
+
+    if (data->edges.count < 1000) {
+        dr_line(a, b, color, data->edge_thickness, .75);
+    } else {
+        dr_line_fast(a, b, color, data->edge_thickness);
+    }
+}
+
+// This is the Fruchtermann-Reingold layout algorithm.
+Void ui_fd_graph_layout (UiFdGraphData *data) {
+    F32 k     = data->density;
+    F32 k2    = k * k;
+    F32 a     = cast(F32, data->nodes.count) * k2;
+    F32 w     = sqrt(a);
+    F32 t     = w/10;
+    U64 iters = 20;
+
+    // @todo The Fruchtermann-Reingold algorithm is O(n^2) in the number
+    // of nodes. It is simply too slow for large graphs. We could improve
+    // this with the Barnes-Hut approximation which brings this down to
+    // O(nlogn), but it will still be slow for large graphs. If the number
+    // of nodes is too big we just fallback to randomly placing the nodes.
+    // The number 5000 is chosen purely empirically.
+    if (data->nodes.count > 5000) {
+        array_iter (node, &data->nodes, *) {
+            F32 x = cast(F32, random_range(0, w)) - w/2;
+            F32 y = cast(F32, random_range(0, w)) - w/2;
+            node->pos = vec2(x, y);
+            node->ipos = node->pos;
+        }
+
+        return;
+    }
+
+    F32 theta = 0;
+    F32 dt = 2*PI/cast(F32, data->nodes.count);
+    array_iter (node, &data->nodes, *) {
+        node->pos = vec2(cos(theta), sin(theta));
+        node->ipos = node->pos;
+        node->displacement = vec2(0, 0);
+        theta += dt;
+    }
+
+    for (U64 i = 0; i < iters; ++i) {
+        array_iter (a, &data->nodes, *) {
+            a->displacement = vec2(0, 0);
+            array_iter_from (b, &data->nodes, ARRAY_IDX + 1, *) {
+                if (a == b) continue;
+
+                F32 dx = a->pos.x - b->pos.x;
+                F32 dy = a->pos.y - b->pos.y;
+                F32 dist2 = dx*dx + dy*dy;
+                if (dist2 < 0.0001f) continue;
+
+                F32 force = k2 / dist2;
+                a->displacement.x += dx * force;
+                a->displacement.y += dy * force;
+                b->displacement.x -= dx * force;
+                b->displacement.y -= dy * force;
+            }
+        }
+
+        array_iter (e, &data->edges, *) {
+            Vec2 dt = sub(e->a->pos, e->b->pos);
+            F32 l = len(dt);
+            if (l < 0.0001) continue;
+            Vec2 v = mul(l*l/k, normalize(dt));
+            e->a->displacement = sub(e->a->displacement, v);
+            e->b->displacement = add(e->b->displacement, v);
+        }
+
+        array_iter (a, &data->nodes, *) {
+            F32 l = len(a->displacement);
+            if (l < 0.0001) continue;
+            Vec2 v = mul(min(l, t), normalize(a->displacement));
+            a->pos = add(a->pos, v);
+        }
+
+        t *= 0.8;
+    }
+}
+
+static Void draw_fd_graph (UiBox *container) {
+    UiFdGraphData *data = cast(UiFdGraphData*, container->scratch);
+
+    if (data->nodes.count == 0) return;
+    if (container->rect.w <= 0 || container->rect.h <= 0) return;
+
+    array_iter (node, &data->nodes, *) ui_animate_vec2(&node->ipos, node->pos, 1);
+
+    array_iter (edge, &data->edges, *) {
+        if (edge->a == data->hovered || edge->b == data->hovered) continue;
+        draw_fd_edge(container, edge);
+    }
+
+    array_iter (edge, &data->edges, *) {
+        if (edge->a != data->hovered && edge->b != data->hovered) continue;
+        draw_fd_edge(container, edge);
+    }
+
+    array_iter (node, &data->nodes, *) draw_fd_node(container, node);
+}
+
+// Don't forget to call ui_fd_graph_layout() yourself or else
+// the graph will look weird. You call the layout function when
+// you detect that the graph has changed in some way.
+UiBox *ui_fd_graph (String id, UiFdGraphData *data) {
+    UiBox *container = ui_box_str(UI_BOX_CLIPPING|UI_BOX_REACTIVE, id) {
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        container->draw_fn = draw_fd_graph;
+        container->scratch = cast(U64, data);
+
+        if (container->start_frame == ui->frame) {
+            data->zoom = 1.0;
+            data->pan  = vec2(0, 0);
+            Vec4 c1 = rgba_to_hsva(ui->theme->bg_color_z1);
+            Vec4 c2 = rgba_to_hsva(ui->theme->text_color_normal);
+            data->edge_color = (c1.z < c2.z) ? ui->theme->bg_color_z1 : ui->theme->text_color_normal;
+        }
+
+        data->hovered = 0;
+        if (container->signals.hovered) {
+            array_iter_back (node, &data->nodes, *) {
+                F32 w  = fd_graph_get_node_size(data);
+                Vec2 p = fd_graph_xform_point(container, node->pos);
+                Rect r = {.x=p.x-w, .y=p.y-w, .w=2*w, .h=2*w};
+                if (ui_within_box(r, ui->mouse)) {
+                    data->hovered = node;
+                    break;
+                }
+            }
+        }
+
+        if (container->signals.clicked) {
+            data->selected = data->hovered;
+        }
+
+        if (container->signals.pressed && (ui->event->tag == EVENT_MOUSE_MOVE)) {
+            data->pan = add(data->pan, ui->mouse_dt);
+            ui_eat_event();
+        }
+
+        if (container->signals.hovered && (ui->event->tag == EVENT_SCROLL)) {
+            F32 new_zoom = data->zoom + ui->event->y * 0.1;
+            new_zoom = max(0.01, new_zoom);
+            Vec2 center = { container->rect.x + container->rect.w/2, container->rect.y + container->rect.h/2 };
+            Vec2 p1 = sub(ui->mouse, center);
+            Vec2 p2 = mul(1.f/data->zoom, sub(p1, data->pan));
+            data->pan = sub(p1, mul(new_zoom, p2));
+            data->zoom = new_zoom;
+            ui_eat_event();
         }
     }
 

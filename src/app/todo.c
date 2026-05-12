@@ -106,14 +106,16 @@ istruct (View) {
             Bool pin_searched;
             Bool hide_searched;
             Bool check_searched;
-            U64 buf_version;
             U64 show_more_idx;
             Buf *buf;
             Buf *tags_add_buf;
             Buf *tags_del_buf;
             ArrayTask searched;
             ArrayTagStat tag_stats;
+            UiFdGraphData graph;
             Bool tag_stats_dirty;
+            U64 search_dirty;
+            U64 buf_version;
         } search;
 
         struct {
@@ -205,6 +207,7 @@ istruct (Context) {
     TickId tick_id;
     F32 editor_width;
     F32 editor_height;
+    Bool show_graph_view;
 };
 
 static Context *context;
@@ -580,6 +583,7 @@ static Void save_config (Bool save_deck) {
     astr_push_fmt(&astr, "editor_width = %f\n", context->editor_width);
     astr_push_fmt(&astr, "editor_height = %f\n", context->editor_height);
     astr_push_fmt(&astr, "view_type = %u\n", context->main_view_type);
+    astr_push_fmt(&astr, "show_graph_view = %s\n", context->show_graph_view ? "true" : "false");
 
     String time_tracker_file = buf_get_str(context->time_tracker_file, tm);
     astr_push_fmt(&astr, "time_tracker_file = \"%.*s\"\n", STR(time_tracker_file));
@@ -633,6 +637,7 @@ static Void load_config () {
 
     context->editor_width = config_get_f64(cfg, cfg->root, "editor_width");
     context->editor_height = config_get_f64(cfg, cfg->root, "editor_height");
+    context->show_graph_view = config_get_bool(cfg, cfg->root, "show_graph_view");
     context->main_view_type = config_get_u64(cfg, cfg->root, "view_type");
     context->time_tracker_file = buf_new(context->config_mem, config_get_string(cfg, cfg->root, "time_tracker_file", tm));
 
@@ -930,6 +935,7 @@ static UiBox *build_task (Task *task, Bool compact, Bool *out_deleted) {
                         if (delete_button->signals.clicked) {
                             if (out_deleted) *out_deleted = true;
                             push_command(.tag=CMD_DEL_TASK, .task=task);
+                            ui_eat_event();
                         }
                     }
 
@@ -1156,6 +1162,43 @@ static Void build_tag_stats (ArrayTagStat *stats, String *out_clicked_tag) {
     }
 }
 
+static Void compute_graph_data () {
+    Auto view = &context->view.search;
+
+    view->graph.nodes.count = 0;
+    view->graph.edges.count = 0;
+
+    array_iter (task, &view->searched) {
+        UiFdGraphNode *node = array_push_slot(&view->graph.nodes);
+        *node = (UiFdGraphNode){ .data = task };
+    }
+
+    array_iter (a, &view->graph.nodes, *) {
+        U64 idx = ARRAY_IDX;
+        array_iter_from (b, &view->graph.nodes, idx + 1, *) {
+            Task *t1 = a->data;
+            Task *t2 = b->data;
+
+            Bool connected = false;
+
+            if ((t1->config->flags & MARKUP_AST_META_CONFIG_HAS_TAGS) && (t2->config->flags & MARKUP_AST_META_CONFIG_HAS_TAGS)) {
+                map_iter (slot, &t1->config->tags) {
+                    if (map_has(&t2->config->tags, slot->key)) {
+                        connected = true;
+                        break;
+                    }
+                }
+            }
+
+            if (connected) {
+                UiFdGraphEdge *edge = array_push_slot(&view->graph.edges);
+                edge->a = a;
+                edge->b = b;
+            }
+        }
+    }
+}
+
 static Void build_view_search () {
     tmem_new(tm);
 
@@ -1168,55 +1211,58 @@ static Void build_view_search () {
         ui_box(0, "search_box") {
             ui_style_f32(UI_SPACING, ui->theme->spacing);
 
-            UiBox *entry = ui_entry(str("entry"), view->buf, -1, str("Filter expression..."));
-            UiBox *inner = array_get(&entry->children, 0);
-            UiTextEditorInfo *search_text_box_info = ui_get_box_data(inner, 0, 0);
+            ui_box(0, "row") {
+                ui_tag("row");
 
-            UiBox *buttons = ui_button_group(str("linked")) {
-                buttons->next_style.size.width.strictness = 1;
+                UiBox *entry = ui_entry(str("entry"), view->buf, -1, str("Filter expression..."));
+                UiBox *inner = array_get(&entry->children, 0);
+                UiTextEditorInfo *search_text_box_info = ui_get_box_data(inner, 0, 0);
 
-                UiBox *tags_button = ui_button(str("tags_button")) {
-                    ui_label_extra(UI_BOX_CLICK_THROUGH, "@", str("@"), ui->config->font_path_bold, ui->config->font_size, 0);
+                UiBox *buttons = ui_button_group(str("linked")) {
+                    buttons->next_style.size.width.strictness = 1;
 
-                    if (tags_button->signals.clicked && view->tag_stats_dirty) {
-                        view->tag_stats_dirty = false;
-                        tmem_new(tm);
+                    UiBox *tags_button = ui_button(str("tags_button")) {
+                        ui_label_extra(UI_BOX_CLICK_THROUGH, "@", str("@"), ui->config->font_path_bold, ui->config->font_size, 0);
 
-                        Map(String, U64) m;
-                        map_init(&m, tm);
+                        if (tags_button->signals.clicked && view->tag_stats_dirty) {
+                            view->tag_stats_dirty = false;
 
-                        array_iter (task, &context->tasks) {
-                            map_iter (slot, &task->config->tags) {
-                                U64 val = 0;
-                                map_get(&m, slot->key, &val);
-                                map_add(&m, slot->key, val + 1);
+                            Map(String, U64) m;
+                            map_init(&m, tm);
+
+                            array_iter (task, &context->tasks) {
+                                map_iter (slot, &task->config->tags) {
+                                    U64 val = 0;
+                                    map_get(&m, slot->key, &val);
+                                    map_add(&m, slot->key, val + 1);
+                                }
+                            }
+
+                            view->tag_stats.count = 0;
+                            map_iter (slot, &m) array_push_lit(&view->tag_stats, slot->key, slot->val);
+                            array_sort_cmp(&view->tag_stats, cmp_tag_stats);
+                        }
+
+                        Bool opened = tags_button->scratch;
+                        if (opened || tags_button->signals.clicked) {
+                            ui_tag("press");
+                            String clicked_tag = {};
+                            ui_popup(str("popup"), &opened, false, tags_button) build_tag_stats(&view->tag_stats, &clicked_tag);
+                            if (clicked_tag.data) {
+                                opened = false;
+                                ui_ted_cursor_insert(search_text_box_info, &search_text_box_info->cursor, clicked_tag);
                             }
                         }
-
-                        view->tag_stats.count = 0;
-                        map_iter (slot, &m) array_push_lit(&view->tag_stats, slot->key, slot->val);
-                        array_sort_cmp(&view->tag_stats, cmp_tag_stats);
+                        tags_button->scratch = opened;
                     }
 
-                    Bool opened = tags_button->scratch;
-                    if (opened || tags_button->signals.clicked) {
-                        ui_tag("press");
-                        String clicked_tag = {};
-                        ui_popup(str("popup"), &opened, false, tags_button) build_tag_stats(&view->tag_stats, &clicked_tag);
-                        if (clicked_tag.data) {
-                            opened = false;
-                            ui_ted_cursor_insert(search_text_box_info, &search_text_box_info->cursor, clicked_tag);
-                        }
-                    }
-                    tags_button->scratch = opened;
+                    UiBox *info_button = ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
+                    ui_style_box_size(tags_button, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, info_button->rect.w, 0});
                 }
-
-                UiBox *info_button = ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
-                ui_style_box_size(tags_button, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, info_button->rect.w, 0});
             }
         }
 
-        ui_box(UI_BOX_INVISIBLE_BG, "checkboxes") {
+        ui_box(UI_BOX_INVISIBLE_BG, "edits") {
             ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
 
             ui_box(0, "delete") {
@@ -1246,10 +1292,6 @@ static Void build_view_search () {
                 ui_hspacer();
                 ui_checkbox("checkbox", &view->check_searched);
             }
-        }
-
-        ui_box(UI_BOX_INVISIBLE_BG, "add_del_tags") {
-            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
 
             ui_box(0, "add_tags") {
                 ui_tag("row");
@@ -1265,6 +1307,80 @@ static Void build_view_search () {
                 ui_hspacer();
                 UiBox *entry = ui_entry(str("entry"), view->tags_del_buf, 25, str("Tags comma separated..."));
                 entry->next_style.size.width.strictness = 1;
+            }
+        }
+
+        ui_box(UI_BOX_INVISIBLE_BG, "graph_settings") {
+            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+
+            ui_box(0, "enable_graph") {
+                ui_tag("row");
+                ui_label(0, "title", str("Enable graph view"));
+                ui_hspacer();
+                String info = str(
+                    "- Dots represent tasks.\n"
+                    "- There is an edge between two tasks if they share a tag in common.\n"
+                    "- The tag is the one specified in the header of the task.\n"
+                );
+                UiBox *info_button = ui_button_info_popup(str("help_button"), true, info, false);
+                info_button->next_style.size.width.strictness = 1;
+                UiBox *toggle = ui_toggle("toggle", &context->show_graph_view);
+                if (toggle->signals.clicked) save_config(false);
+            }
+
+            if (context->show_graph_view) {
+                ui_box(0, "density") {
+                    ui_tag("row");
+                    ui_label(0, "title", str("Density"));
+                    ui_hspacer();
+                    F32 prev = view->graph.density;
+                    F64 val = view->graph.density;
+                    UiBox *picker = ui_f64_picker(str("picker"), &val, 1, INFINITY, 6);
+                    picker->next_style.size.width.strictness = 1;
+                    view->graph.density = val;
+                    if (prev != view->graph.density) ui_fd_graph_layout(&view->graph);
+                }
+
+                ui_box(0, "zoom") {
+                    ui_tag("row");
+                    ui_label(0, "title", str("Zoom"));
+                    ui_hspacer();
+                    F64 val = view->graph.zoom;
+                    UiBox *picker = ui_f64_picker(str("picker"), &val, 0.01, INFINITY, 6);
+                    picker->next_style.size.width.strictness = 1;
+                    view->graph.zoom = val;
+                }
+
+                ui_box(0, "pan") {
+                    ui_tag("row");
+                    ui_label(0, "title", str("Pan"));
+                    ui_hspacer();
+
+                    F64 val = view->graph.pan.x;
+                    UiBox *picker1 = ui_f64_picker(str("picker1"), &val, -INFINITY, INFINITY, 6);
+                    picker1->next_style.size.width.strictness = 1;
+                    view->graph.pan.x = val;
+
+                    val = view->graph.pan.y;
+                    UiBox *picker2 = ui_f64_picker(str("picker2"), &val, -INFINITY, INFINITY, 6);
+                    picker2->next_style.size.width.strictness = 1;
+                    view->graph.pan.y = val;
+                }
+            }
+        }
+
+        if (view->graph.selected) {
+            EventTag etag = ui->event->tag;
+            build_task(view->graph.selected->data, true, 0);
+            if (ui->event->tag != etag) {
+                view->graph.selected = 0;
+                view->search_dirty = 2;
+                view->tag_stats_dirty = true;
+            }
+
+            ui_style_rule(".card") {
+                ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+                ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z2);
             }
         }
 
@@ -1301,43 +1417,55 @@ static Void build_view_search () {
                     push_command(.tag=CMD_SORT_TASKS);
                     push_command(.tag=CMD_SAVE_CONFIG, .save_deck=true);
                     view->tag_stats_dirty = true;
+                    view->search_dirty = 2;
                 }
             }
         }
     }
 
-    ui_scroll_box(str("right_box"), true) {
-        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-        ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
-        ui_style_f32(UI_SPACING, ui->theme->spacing);
-        ui_style_vec2(UI_PADDING, ui->theme->padding);
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+    if (view->buf_version != buf_get_version(view->buf)) {
+        view->search_dirty = 1;
+        view->buf_version = buf_get_version(view->buf);
+    }
 
-        if (view->buf_version != buf_get_version(view->buf)) {
-            view->searched.count = 0;
-            view->buf_version = buf_get_version(view->buf);
+    if (view->search_dirty-- == 0) {
+        view->searched.count = 0;
 
-            String filter_text = buf_get_str(view->buf, tm);
-            MarkupAst *filter_node = markup_filter_parse(tm, filter_text);
+        String filter_text = buf_get_str(view->buf, tm);
+        MarkupAst *filter_node = markup_filter_parse(tm, filter_text);
 
-            array_iter (task, &context->tasks) {
-                if (task_passes_filter(task, filter_node)) {
-                    array_push(&view->searched, task);
-                }
+        array_iter (task, &context->tasks) {
+            if (task_passes_filter(task, filter_node)) {
+                array_push(&view->searched, task);
             }
         }
 
-        Bool deleted = false;
+        compute_graph_data();
+        ui_fd_graph_layout(&view->graph);
+    }
 
-        array_iter (task, &view->searched) {
-            if (ARRAY_IDX == view->show_more_idx) break;
-            build_task(task, false, &deleted);
+    if (context->show_graph_view) {
+        ui_fd_graph(str("graph"), &view->graph);
+    } else {
+        ui_scroll_box(str("right_box"), true) {
+            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+            ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+            ui_style_f32(UI_SPACING, ui->theme->spacing);
+            ui_style_vec2(UI_PADDING, ui->theme->padding);
+            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+            ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+
+            Bool deleted = false;
+
+            array_iter (task, &view->searched) {
+                if (ARRAY_IDX == view->show_more_idx) break;
+                build_task(task, false, &deleted);
+            }
+
+            app_show_more_button(str("show_more"), &view->show_more_idx, view->searched.count);
+
+            if (deleted) view->search_dirty = 1;
         }
-
-        app_show_more_button(str("show_more"), &view->show_more_idx, view->searched.count);
-
-        if (deleted) view->buf_version--; // To refresh the searched array.
     }
 }
 
@@ -2191,62 +2319,66 @@ static Void compute_kanban_columns () {
 static Void build_view_main_compact () {
     Auto view = &context->view.main;
 
-    ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+    ui_scroll_box(str("cards"), true) {
+        ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
-    ui_box(0, "cards") {
-        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-        ui_style_f32(UI_SPACING, ui->theme->spacing*3);
-        ui_style_vec2(UI_PADDING, ui->theme->padding);
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 1});
+        ui_box(0, "cards") {
+            ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+            ui_style_f32(UI_SPACING, ui->theme->spacing*3);
+            ui_style_vec2(UI_PADDING, ui->theme->padding);
+            ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width, 1});
 
-        array_iter (column, &view->columns) {
-            ui_box_fmt(0, "row%lu", ARRAY_IDX) {
-                ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-                ui_style_f32(UI_SPACING, ui->theme->spacing);
+            array_iter (column, &view->columns) {
+                ui_box_fmt(0, "row%lu", ARRAY_IDX) {
+                    ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+                    ui_style_f32(UI_SPACING, ui->theme->spacing);
 
-                if (column->with_header) {
-                    UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
-                        ui_tag("card");
+                    if (column->with_header) {
+                        UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
+                            ui_tag("card");
 
-                        ui_style_rule(".card") {
-                            ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
-                            ui_style_vec4(UI_BG_COLOR, vec4(0, 0, 0, 0));
-                            ui_style_vec4(UI_RADIUS, vec4(0, 0, 0, 0));
-                            ui_style_vec4(UI_BORDER_WIDTHS, vec4(0, 0, 0, 0));
-                        }
+                            ui_style_rule(".card") {
+                                ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
+                                ui_style_vec4(UI_BG_COLOR, vec4(0, 0, 0, 0));
+                                ui_style_vec4(UI_RADIUS, vec4(0, 0, 0, 0));
+                                ui_style_vec4(UI_BORDER_WIDTHS, vec4(0, 0, 0, 0));
+                            }
 
-                        ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size*1.25, false);
-                        ui_hspacer();
+                            ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size*1.25, false);
+                            ui_hspacer();
 
-                        if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
-                            ui_box(0, "autohide_icons") {
-                                UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
-                                    ui_tag("button");
-                                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
-                                    search_button->next_style.size.width.strictness = 1;
-                                    if (search_button->signals.clicked) {
-                                        AString filter = astr_new(context->view_mem);
-                                        array_iter (c, &view->columns) {
-                                            if (c == column) break;
-                                            astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                            if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
+                                ui_box(0, "autohide_icons") {
+                                    UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
+                                        ui_tag("button");
+                                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
+                                        search_button->next_style.size.width.strictness = 1;
+                                        if (search_button->signals.clicked) {
+                                            AString filter = astr_new(context->view_mem);
+                                            array_iter (c, &view->columns) {
+                                                if (c == column) break;
+                                                astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                                            }
+                                            astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
+                                            push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
                                         }
-                                        astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
-                                        push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                array_iter (task, &column->tasks) {
-                    if (ARRAY_IDX == column->show_more_idx) break;
-                    Bool deleted = false;
-                    build_task(task, true, &deleted);
-                    if (deleted) push_command(.tag=CMD_VIEW_MAIN); // To recompute the cached columns.
-                }
+                    array_iter (task, &column->tasks) {
+                        if (ARRAY_IDX == column->show_more_idx) break;
+                        Bool deleted = false;
+                        build_task(task, true, &deleted);
+                        if (deleted) push_command(.tag=CMD_VIEW_MAIN); // To recompute the cached columns.
+                    }
 
-                app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
+                    app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
+                }
             }
         }
     }
@@ -2257,53 +2389,58 @@ static Void build_view_main_sparse () {
 
     if (! view->has_filters) ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
 
-    ui_box(0, "cards") {
-        ui_style_f32(UI_SPACING, ui->theme->spacing);
-        ui_style_vec2(UI_PADDING, ui->theme->padding);
+    ui_scroll_box(str("cards"), true) {
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
+        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
-        array_iter (column, &view->columns) {
-            ui_box_fmt(0, "column%lu", ARRAY_IDX) {
-                ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-                ui_style_f32(UI_SPACING, ui->theme->spacing);
+        ui_box(0, "cards") {
+            ui_style_f32(UI_SPACING, ui->theme->spacing);
+            ui_style_vec2(UI_PADDING, ui->theme->padding);
 
-                if (column->with_header) {
-                    UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
-                        ui_tag("card");
-                        ui_style_rule(".card") ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
-                        ui_style_vec2(UI_PADDING, ui->theme->padding);
+            array_iter (column, &view->columns) {
+                ui_box_fmt(0, "column%lu", ARRAY_IDX) {
+                    ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+                    ui_style_f32(UI_SPACING, ui->theme->spacing);
 
-                        ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size, false);
-                        ui_hspacer();
+                    if (column->with_header) {
+                        UiBox *header = ui_box(UI_BOX_REACTIVE|UI_BOX_CAN_FOCUS, "header") {
+                            ui_tag("card");
+                            ui_style_rule(".card") ui_style_u32(UI_AXIS, UI_AXIS_HORIZONTAL);
+                            ui_style_vec2(UI_PADDING, ui->theme->padding);
 
-                        if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
-                            ui_box(0, "autohide_icons") {
-                                UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
-                                    ui_tag("button");
-                                    ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
-                                    search_button->next_style.size.width.strictness = 1;
-                                    if (search_button->signals.clicked) {
-                                        AString filter = astr_new(context->view_mem);
-                                        array_iter (c, &view->columns) {
-                                            if (c == column) break;
-                                            astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                            ui_label_extra(0, "filter", column->filter_text, ui->config->font_path_bold, ui->config->font_size, false);
+                            ui_hspacer();
+
+                            if (ui_within_box(header->rect, ui->mouse) || (ui->focused && ui_is_descendant(header, ui->focused))) {
+                                ui_box(0, "autohide_icons") {
+                                    UiBox *search_button = ui_box(UI_BOX_CAN_FOCUS|UI_BOX_REACTIVE, "search") {
+                                        ui_tag("button");
+                                        ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SEARCH);
+                                        search_button->next_style.size.width.strictness = 1;
+                                        if (search_button->signals.clicked) {
+                                            AString filter = astr_new(context->view_mem);
+                                            array_iter (c, &view->columns) {
+                                                if (c == column) break;
+                                                astr_push_fmt(&filter, "!(%.*s) & ", STR(c->filter_text));
+                                            }
+                                            astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
+                                            push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
                                         }
-                                        astr_push_fmt(&filter, "(%.*s)", STR(column->filter_text));
-                                        push_command(.tag=CMD_VIEW_SEARCH, .str=astr_to_str(&filter));
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                array_iter (task, &column->tasks) {
-                    if (ARRAY_IDX == column->show_more_idx) break;
-                    Bool deleted = false;
-                    build_task(task, false, &deleted);
-                    if (deleted) push_command(.tag=CMD_VIEW_MAIN); // To recompute the cached columns.
-                }
+                    array_iter (task, &column->tasks) {
+                        if (ARRAY_IDX == column->show_more_idx) break;
+                        Bool deleted = false;
+                        build_task(task, false, &deleted);
+                        if (deleted) push_command(.tag=CMD_VIEW_MAIN); // To recompute the cached columns.
+                    }
 
-                app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
+                    app_show_more_button(str("show_more"), &column->show_more_idx, column->tasks.count);
+                }
             }
         }
     }
@@ -2364,12 +2501,6 @@ static Void build_view_main () {
                 if (search_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Search tasks")); }
             }
 
-            UiBox *deck_button = ui_button(str("deck")) {
-                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FOLDER);
-                if (deck_button->signals.clicked) push_command(.tag=CMD_VIEW_DECK_BROWSER);
-                if (deck_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Browse decks")); }
-            }
-
             UiBox *sort_button = ui_button(str("sort")) {
                 ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_SORT_ASC);
                 if (sort_button->signals.clicked) push_command(.tag=CMD_VIEW_SORT);
@@ -2381,6 +2512,12 @@ static Void build_view_main () {
                 if (context->tracked_task) ui_style_box_vec4(icon, UI_TEXT_COLOR, ui->theme->text_color_red);
                 if (tracker_button->signals.clicked) push_command(.tag=CMD_VIEW_TIME_TRACKER);
                 if (tracker_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Time tracker")); }
+            }
+
+            UiBox *deck_button = ui_button(str("deck")) {
+                ui_icon(UI_BOX_CLICK_THROUGH, "icon", UI_ICON_FOLDER);
+                if (deck_button->signals.clicked) push_command(.tag=CMD_VIEW_DECK_BROWSER);
+                if (deck_button->signals.hovered) { ui_tooltip(str("tooltip")) ui_label(0, "tooltip", str("Browse decks")); }
             }
 
             UiBox *file_button = ui_button(str("file")) {
@@ -2395,16 +2532,9 @@ static Void build_view_main () {
         }
     }
 
-    ui_scroll_box(str("cards"), true) {
-        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
-        ui_style_f32(UI_SPACING, ui->theme->spacing);
-        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-        ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
-
-        switch (context->main_view_type) {
-        case MAIN_VIEW_SPARSE: build_view_main_sparse(); break;
-        case MAIN_VIEW_COMPACT: build_view_main_compact(); break;
-        }
+    switch (context->main_view_type) {
+    case MAIN_VIEW_SPARSE: build_view_main_sparse(); break;
+    case MAIN_VIEW_COMPACT: build_view_main_compact(); break;
     }
 }
 
@@ -2624,15 +2754,21 @@ static Void execute_commands () {
         } break;
 
         case CMD_VIEW_SEARCH: {
-            String needle = cmd->str.data ? str_copy(tm, cmd->str) : str("*");
             destroy_current_view();
             context->view.tag = VIEW_SEARCH;
-            context->view.search.buf = buf_new(context->view_mem, needle);
-            context->view.search.tags_add_buf = buf_new(context->view_mem, str(""));
-            context->view.search.tags_del_buf = buf_new(context->view_mem, str(""));
-            context->view.search.tag_stats_dirty = true;
-            array_init(&context->view.search.searched, context->view_mem);
-            array_init(&context->view.search.tag_stats, context->view_mem);
+            Auto view = &context->view.search;
+            view->buf = buf_new(context->view_mem, cmd->str.data ? str_copy(tm, cmd->str) : str("*"));
+            view->tags_add_buf = buf_new(context->view_mem, str(""));
+            view->tags_del_buf = buf_new(context->view_mem, str(""));
+            array_init(&view->searched, context->view_mem);
+            array_init(&view->tag_stats, context->view_mem);
+            array_init(&view->graph.nodes, context->view_mem);
+            array_init(&view->graph.edges, context->view_mem);
+            view->graph.density = ui_em(6.66);
+            view->graph.node_size = ui_em(.5);
+            view->graph.edge_thickness = ui_em(0.166);
+            view->search_dirty = 1;
+            view->tag_stats_dirty = true;
         } break;
 
         case CMD_VIEW_EDITOR: {
@@ -2720,7 +2856,7 @@ Void todo_view_build (UiViewInstance *, Bool visible) {
 Void todo_view_init (UiViewInstance *) {
     if (! context) {
         context = mem_new(mem_root, Context);
-        context->config_version = 2;
+        context->config_version = 3;
         context->view_mem = cast(Mem*, arena_new(mem_root, 1*KB));
         context->config_mem = cast(Mem*, arena_new(mem_root, 1*KB));
         array_init(&context->commands, mem_root);
