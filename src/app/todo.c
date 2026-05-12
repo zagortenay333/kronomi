@@ -34,9 +34,15 @@ istruct (Task) {
     MarkupAstMetaConfig *config;
 };
 
+istruct (TagStat) {
+    String tag;
+    U64 count;
+};
+
 array_typedef(Sort, Sort);
 array_typedef(Deck*, Deck);
 array_typedef(Task*, Task);
+array_typedef(TagStat, TagStat);
 
 istruct (KanbanColumn) {
     Bool with_header;
@@ -106,6 +112,8 @@ istruct (View) {
             Buf *tags_add_buf;
             Buf *tags_del_buf;
             ArrayTask searched;
+            ArrayTagStat tag_stats;
+            Bool tag_stats_dirty;
         } search;
 
         struct {
@@ -130,6 +138,8 @@ istruct (View) {
             Date line_graph_date;
             UiGraphData line_graph_data;
             Array(FilteredTrackerSlot) filtered_slots;
+            ArrayTagStat tag_stats;
+            Bool tag_stats_dirty;
         } time_tracker;
     };
 };
@@ -1111,6 +1121,41 @@ static Void build_view_editor () {
     }
 }
 
+static Int cmp_tag_stats (Void *a_, Void *b_) {
+    TagStat *a = cast(TagStat*, a_);
+    TagStat *b = cast(TagStat*, b_);
+    return a->count < b->count ? 1 : a->count > b->count ? -1 : 0;
+}
+
+static Void build_tag_stats (ArrayTagStat *stats, String *out_clicked_tag) {
+    ui_box(0, "tag_stats") {
+        ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PIXELS, ui->config->card_width/2, 1});
+        ui_style_u32(UI_AXIS, UI_AXIS_VERTICAL);
+
+        array_iter (s, stats) {
+            tmem_new(tm);
+
+            String id = astr_fmt(tm, "item%lu", ARRAY_IDX);
+            UiBox *button = ui_button(id) {
+                ui_style_vec4(UI_BG_COLOR, vec4(0, 0, 0, 0));
+                ui_style_vec4(UI_BORDER_COLOR, vec4(0, 0, 0, 0));
+                ui_style_vec4(UI_BG_COLOR2, vec4(-1, 0, 0, 0));
+                ui_style_f32(UI_OUTSET_SHADOW_WIDTH, 0);
+                if (button->signals.hovered) ui_style_vec4(UI_BG_COLOR, ui->theme->bg_color_z3);
+
+                if (button->signals.clicked) {
+                    *out_clicked_tag = s.tag;
+                    ui_eat_event();
+                }
+
+                ui_label(UI_BOX_CLICK_THROUGH, "tag", s.tag);
+                ui_hspacer();
+                ui_label(UI_BOX_CLICK_THROUGH, "count", astr_fmt(tm, "%lu", s.count));
+            }
+        }
+    }
+}
+
 static Void build_view_search () {
     tmem_new(tm);
 
@@ -1122,9 +1167,53 @@ static Void build_view_search () {
 
         ui_box(0, "search_box") {
             ui_style_f32(UI_SPACING, ui->theme->spacing);
-            ui_entry(str("entry"), view->buf, -1, str("Filter expression..."));
-            UiBox *info_button = ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
-            info_button->next_style.size.width.strictness = 1;
+
+            UiBox *entry = ui_entry(str("entry"), view->buf, -1, str("Filter expression..."));
+            UiBox *inner = array_get(&entry->children, 0);
+            UiTextEditorInfo *search_text_box_info = ui_get_box_data(inner, 0, 0);
+
+            UiBox *buttons = ui_button_group(str("linked")) {
+                buttons->next_style.size.width.strictness = 1;
+
+                UiBox *tags_button = ui_button(str("tags_button")) {
+                    ui_label_extra(UI_BOX_CLICK_THROUGH, "@", str("@"), ui->config->font_path_bold, ui->config->font_size, 0);
+
+                    if (tags_button->signals.clicked && view->tag_stats_dirty) {
+                        view->tag_stats_dirty = false;
+                        tmem_new(tm);
+
+                        Map(String, U64) m;
+                        map_init(&m, tm);
+
+                        array_iter (task, &context->tasks) {
+                            map_iter (slot, &task->config->tags) {
+                                U64 val = 0;
+                                map_get(&m, slot->key, &val);
+                                map_add(&m, slot->key, val + 1);
+                            }
+                        }
+
+                        view->tag_stats.count = 0;
+                        map_iter (slot, &m) array_push_lit(&view->tag_stats, slot->key, slot->val);
+                        array_sort_cmp(&view->tag_stats, cmp_tag_stats);
+                    }
+
+                    Bool opened = tags_button->scratch;
+                    if (opened || tags_button->signals.clicked) {
+                        ui_tag("press");
+                        String clicked_tag = {};
+                        ui_popup(str("popup"), &opened, false, tags_button) build_tag_stats(&view->tag_stats, &clicked_tag);
+                        if (clicked_tag.data) {
+                            opened = false;
+                            ui_ted_cursor_insert(search_text_box_info, &search_text_box_info->cursor, clicked_tag);
+                        }
+                    }
+                    tags_button->scratch = opened;
+                }
+
+                UiBox *info_button = ui_button_info_popup(str("help_button"), true, str("data/docs/filters.txt"), true);
+                ui_style_box_size(tags_button, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, info_button->rect.w, 0});
+            }
         }
 
         ui_box(UI_BOX_INVISIBLE_BG, "checkboxes") {
@@ -1211,6 +1300,7 @@ static Void build_view_search () {
 
                     push_command(.tag=CMD_SORT_TASKS);
                     push_command(.tag=CMD_SAVE_CONFIG, .save_deck=true);
+                    view->tag_stats_dirty = true;
                 }
             }
         }
@@ -1824,9 +1914,55 @@ static Void build_view_time_tracker () {
 
             ui_box(0, "filter_expression") {
                 ui_tag("row");
-                ui_entry(str("entry"), view->filter_buf, -1, str("Filter expression..."));
-                UiBox *info_button = ui_button_info_popup(str("info_button"), true, str("data/docs/filters.txt"), true);
-                info_button->next_style.size.width.strictness = 1;
+
+                UiBox *entry = ui_entry(str("entry"), view->filter_buf, -1, str("Filter expression..."));
+                UiBox *inner = array_get(&entry->children, 0);
+                UiTextEditorInfo *search_text_box_info = ui_get_box_data(inner, 0, 0);
+
+                UiBox *buttons = ui_button_group(str("linked")) {
+                    buttons->next_style.size.width.strictness = 1;
+
+                    UiBox *tags_button = ui_button(str("tags_button")) {
+                        ui_label_extra(UI_BOX_CLICK_THROUGH, "@", str("@"), ui->config->font_path_bold, ui->config->font_size, 0);
+
+                        if (tags_button->signals.clicked && view->tag_stats_dirty) {
+                            view->tag_stats_dirty = false;
+                            tmem_new(tm);
+
+                            Map(String, U64) m;
+                            map_init(&m, tm);
+
+                            array_iter (slot, &context->tracker_slots, *) {
+                                if (slot->task_ast->tag != MARKUP_AST_META) continue;
+                                MarkupAstMetaConfig *config = cast(MarkupAstMeta*, slot->task_ast)->config;
+                                map_iter (slot, &config->tags) {
+                                    U64 val = 0;
+                                    map_get(&m, slot->key, &val);
+                                    map_add(&m, slot->key, val + 1);
+                                }
+
+                                view->tag_stats.count = 0;
+                                map_iter (slot, &m) array_push_lit(&view->tag_stats, slot->key, slot->val);
+                                array_sort_cmp(&view->tag_stats, cmp_tag_stats);
+                            }
+                        }
+
+                        Bool opened = tags_button->scratch;
+                        if (opened || tags_button->signals.clicked) {
+                            ui_tag("press");
+                            String clicked_tag = {};
+                            ui_popup(str("popup"), &opened, false, tags_button) build_tag_stats(&view->tag_stats, &clicked_tag);
+                            if (clicked_tag.data) {
+                                opened = false;
+                                ui_ted_cursor_insert(search_text_box_info, &search_text_box_info->cursor, clicked_tag);
+                            }
+                        }
+                        tags_button->scratch = opened;
+                    }
+
+                    UiBox *info_button = ui_button_info_popup(str("info_button"), true, str("data/docs/filters.txt"), true);
+                    ui_style_box_size(tags_button, UI_WIDTH, (UiSize){UI_SIZE_PIXELS, info_button->rect.w, 0});
+                }
             }
 
             ui_box(0, "since_date") {
@@ -2478,8 +2614,10 @@ static Void execute_commands () {
             context->view.time_tracker.heatmap_date = os_get_date();
             context->view.time_tracker.line_graph_date = os_get_date();
             context->view.time_tracker.descending = true;
+            context->view.time_tracker.tag_stats_dirty = true;
             array_init(&context->view.time_tracker.filtered_slots, context->view_mem);
             array_init(&context->view.time_tracker.line_graph_data.records, context->view_mem);
+            array_init(&context->view.time_tracker.tag_stats, context->view_mem);
             context->view.time_tracker.line_graph_data.y_max = 24*60*60;
             map_init(&context->view.time_tracker.heatmap_data, context->view_mem);
         } break;
@@ -2491,7 +2629,9 @@ static Void execute_commands () {
             context->view.search.buf = buf_new(context->view_mem, needle);
             context->view.search.tags_add_buf = buf_new(context->view_mem, str(""));
             context->view.search.tags_del_buf = buf_new(context->view_mem, str(""));
+            context->view.search.tag_stats_dirty = true;
             array_init(&context->view.search.searched, context->view_mem);
+            array_init(&context->view.search.tag_stats, context->view_mem);
         } break;
 
         case CMD_VIEW_EDITOR: {
