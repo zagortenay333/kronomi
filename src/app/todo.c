@@ -1902,6 +1902,7 @@ static Void build_view_time_tracker () {
                 if (! is_file) {
                     ui_style_rule("#entry #text_box") ui_style_vec4(UI_TEXT_COLOR, ui->theme->text_color_red);
                 } else if (ui->event->tag != etag) {
+                    view->tag_stats_dirty = true;
                     stop_tracking();
                     load_time_tracker_data();
                     save_config(false);
