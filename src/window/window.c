@@ -124,7 +124,7 @@ static Void update_projection () {
     projection = mat_ortho(0, w, 0, h, -1.f, 1.f);
 }
 
-static U32 framebuffer_new (U32 *out_texture, Bool only_color_attach, U32 w, U32 h) {
+static U32 framebuffer_new (U32 *out_texture, U32 w, U32 h) {
     U32 r;
     glGenFramebuffers(1, &r);
     glBindFramebuffer(GL_FRAMEBUFFER, r);
@@ -139,14 +139,6 @@ static U32 framebuffer_new (U32 *out_texture, Bool only_color_attach, U32 w, U32
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
     if (out_texture) *out_texture = texture;
-
-    if (! only_color_attach) {
-        U32 rbo;
-        glGenRenderbuffers(1, &rbo);
-        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
-    }
 
     assert_always(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -740,9 +732,16 @@ static Void process_event (SDL_Event *event, Bool *running) {
         update_projection();
         glViewport(0, 0, width, height);
 
-        framebuffer = framebuffer_new(&framebuffer_tex, 1, win_width, win_height);
-        blur_buffer1 = framebuffer_new(&blur_tex1, 1, floor(win_width  / BLUR_SHRINK), floor(win_height / BLUR_SHRINK));
-        blur_buffer2 = framebuffer_new(&blur_tex2, 1, floor(win_width  / BLUR_SHRINK), floor(win_height / BLUR_SHRINK));
+        glDeleteFramebuffers(1, &framebuffer);
+        glDeleteTextures(1, &framebuffer_tex);
+        glDeleteFramebuffers(1, &blur_buffer1);
+        glDeleteTextures(1, &blur_tex1);
+        glDeleteFramebuffers(1, &blur_buffer2);
+        glDeleteTextures(1, &blur_tex2);
+
+        framebuffer = framebuffer_new(&framebuffer_tex, win_width, win_height);
+        blur_buffer1 = framebuffer_new(&blur_tex1, floor(win_width  / BLUR_SHRINK), floor(win_height / BLUR_SHRINK));
+        blur_buffer2 = framebuffer_new(&blur_tex2, floor(win_width  / BLUR_SHRINK), floor(win_height / BLUR_SHRINK));
 
         glScissor(0, 0, width, height);
 
@@ -822,9 +821,9 @@ Void win_init (CString title) {
         cursors[c] = SDL_CreateSystemCursor(c);
     }
 
-    framebuffer   = framebuffer_new(&framebuffer_tex, 1, win_width, win_height);
-    blur_buffer1  = framebuffer_new(&blur_tex1, 1, floor(win_width/BLUR_SHRINK), floor(win_height/BLUR_SHRINK));
-    blur_buffer2  = framebuffer_new(&blur_tex2, 1, floor(win_width/BLUR_SHRINK), floor(win_height/BLUR_SHRINK));
+    framebuffer   = framebuffer_new(&framebuffer_tex, win_width, win_height);
+    blur_buffer1  = framebuffer_new(&blur_tex1, floor(win_width/BLUR_SHRINK), floor(win_height/BLUR_SHRINK));
+    blur_buffer2  = framebuffer_new(&blur_tex2, floor(win_width/BLUR_SHRINK), floor(win_height/BLUR_SHRINK));
     rect_shader   = shader_new("data/shaders/rect_vs.glsl", "data/shaders/rect_fs.glsl");
     screen_shader = shader_new("data/shaders/screen_vs.glsl", "data/shaders/screen_fs.glsl");
     blur_shader   = shader_new("data/shaders/blur_vs.glsl", "data/shaders/blur_fs.glsl");
