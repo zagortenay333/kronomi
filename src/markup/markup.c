@@ -398,7 +398,7 @@ static Parselet get_inline_parselet (Parser *p) {
         case '<':
             return parse_link;
         case '@':
-            if (p->start_of_word && lex_try_peek_nth(p->lex, 2, TOKEN_WORD)) return parse_tag_ref;
+            if (lex_try_peek_nth(p->lex, 2, TOKEN_WORD)) return parse_tag_ref;
             break;
         default:
             break;
@@ -1034,7 +1034,8 @@ static MarkupAst *parse_markup (Parser *p) {
 
 MarkupAst *markup_parse (Mem *mem, String text) {
     Parser *p = parser_new(mem, text);
-    return parse_markup(p);
+    MarkupAst *node = parse_markup(p);
+    return node;
 }
 
 // Translates an index into the innermost ast node containing
