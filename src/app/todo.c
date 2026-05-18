@@ -2387,9 +2387,9 @@ static Void build_view_main_compact () {
 static Void build_view_main_sparse () {
     Auto view = &context->view.main;
 
-    if (! view->has_filters) ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
-
     ui_scroll_box(str("cards"), true) {
+        if (! view->has_filters) ui_style_u32(UI_ALIGN_X, UI_ALIGN_MIDDLE);
+
         ui_style_size(UI_WIDTH, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
         ui_style_size(UI_HEIGHT, (UiSize){UI_SIZE_PCT_PARENT, 1, 0});
 
